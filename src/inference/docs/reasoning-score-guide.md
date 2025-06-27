@@ -5,7 +5,7 @@ This guide walks you through setting up and running reasoning benchmarks on your
 ## Prerequisites
 
 - Ensure you are in the pytorch_2_6 nxdi venv
-- Ensure you have run `./nki-llama inference setup` first
+- Ensure you have setup this repo per the [README](/README.md) and run `./nki-llama inference setup` first
 - tmux for session management - start a new session eg: `tmux new -s bench`
 
 ## Step 1: Clone the Repository
