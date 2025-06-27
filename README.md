@@ -38,6 +38,10 @@ NKI-LLAMA provides a streamlined interface for the complete LLM development life
 
 ### System Requirements
 - **Instance**: trn1.32xlarge (recommended)
+    - May need to increase quota for "Running Dedicated trn1 Hosts" in [Oregon](https://us-west-2.console.aws.amazon.com/servicequotas/home/services/ec2/quotas/L-5E4FB836) or [Ohio](https://us-east-2.console.aws.amazon.com/servicequotas/home/services/ec2/quotas/L-5E4FB836) or search for "trn1" on the EC2 [quotas page](https://us-west-2.console.aws.amazon.com/servicequotas/home/services/ec2/quotas)
+- **AMI**: Deep Learning AMI Neuron (Ubuntu 22.04)
+- **Neuron SDK**: 2.23.0
+- **Python**: 3.10
 - **AMI**: Deep Learning AMI Neuron (Ubuntu 22.04)
 - **Neuron SDK**: 2.23.0
 - **Python**: 3.10
