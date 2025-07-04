@@ -38,6 +38,11 @@ NKI-LLAMA provides a streamlined interface for the complete LLM development life
 
 ### System Requirements
 - **Instance**: trn1.32xlarge (recommended)
+    - May need to increase quota for "Running Dedicated trn1 Hosts" in [Oregon](https://us-west-2.console.aws.amazon.com/servicequotas/home/services/ec2/quotas/L-5E4FB836) or [Ohio](https://us-east-2.console.aws.amazon.com/servicequotas/home/services/ec2/quotas/L-5E4FB836) or search for "trn1" on the EC2 [quotas page](https://us-west-2.console.aws.amazon.com/servicequotas/home/services/ec2/quotas)
+    - The trn1.32xlarge instance requires 128 vCPUs. To make a request for a vCPU increase you can visit this [page](https://support.console.aws.amazon.com/support/home#/case/create) and create an issue under Service > Service Quotas, Category > General. If you only have the default number of vCPUs available (8), you can still use a trn1.2xlarge instance which has 8 vCPUs, install everything, then stop/upgrade the instance type once you get your vCPU increase request approved.
+- **AMI**: Deep Learning AMI Neuron (Ubuntu 22.04)
+- **Neuron SDK**: 2.23.0
+- **Python**: 3.10
 - **AMI**: Deep Learning AMI Neuron (Ubuntu 22.04)
 - **Neuron SDK**: 2.23.0
 - **Python**: 3.10
@@ -69,8 +74,10 @@ chmod +x install.sh
 
 # Configure
 cp .env.example .env
-nano .env  # Add your HF_TOKEN
+nano .env  # Add your HF_TOKEN from https://huggingface.co/settings/tokens
 # inference env vars, ensure max_model_len= seq_len
+# Set NEURON_RT_NUM_CORES based on your instance hardware
+# Set TENSOR_PARALLEL_SIZE based on your model parallelization strategy
 ```
 
 ### 3. First Run
@@ -79,11 +86,13 @@ nano .env  # Add your HF_TOKEN
 ./nki-llama setup
 
 # Download model
-source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+# First request and gain access to model here: https://huggingface.co/meta-llama/Meta-Llama-3-8B
+source /opt/aws_neuronx_venv_pytorch_2_7_nxd_inference/bin/activate
 ./nki-llama inference download
 
 # Run benchmark (compiles model on first run)
 tmux new -s benchmark
+source /opt/aws_neuronx_venv_pytorch_2_7_nxd_inference/bin/activate
 ./nki-llama inference benchmark
 ```
 
