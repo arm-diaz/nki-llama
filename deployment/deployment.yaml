@@ -1,0 +1,406 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Simplified CloudFormation template to deploy NKI-Llama on EC2
+
+Parameters:
+  KeyPairOption:
+    Description: Choose how to handle SSH key pair
+    Type: String
+    Default: use-existing
+    AllowedValues:
+      - use-existing
+      - create-new
+      - none
+  
+  ExistingKeyPairName:
+    Description: Select an existing EC2 KeyPair from the dropdown (required if KeyPairOption is 'use-existing')
+    Type: AWS::EC2::KeyPair::KeyName
+  
+  NewKeyPairName:
+    Description: Name for the new EC2 KeyPair to create (required if KeyPairOption is 'create-new')
+    Type: String
+    Default: ''
+  
+  Ec2InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: trn1.32xlarge
+    AllowedValues:
+      - trn1.32xlarge
+  
+  VpcOption:
+    Description: Choose whether to use an existing VPC or create a new one
+    Type: String
+    Default: create-new
+    AllowedValues:
+      - create-new
+      - use-existing
+  
+  ExistingVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'Select an existing VPC from the dropdown (required if VpcOption is "use-existing")'
+  
+  ExistingSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: 'Select an existing Subnet from the dropdown (required if VpcOption is "use-existing")'
+  
+  UseExistingSecurityGroup:
+    Type: String
+    Description: 'Use an existing security group when using existing VPC?'
+    Default: 'no'
+    AllowedValues:
+      - 'yes'
+      - 'no'
+  
+  ExistingSecurityGroupId:
+    Type: String
+    Description: 'Select an existing Security Group ID (optional - only needed if UseExistingSecurityGroup is "yes")'
+    Default: 'sg-placeholder'  # Default placeholder value
+  
+  VpcCidrBlock:
+    Type: String
+    Description: 'CIDR block for the VPC (only used if creating new VPC)'
+    Default: '10.4.0.0/16'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    ConstraintDescription: 'Must be a valid IPv4 CIDR block'
+  
+  PublicSubnet1Cidr:
+    Type: String
+    Description: 'CIDR block for public subnet 1 (only used if creating new VPC)'
+    Default: '10.4.1.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    ConstraintDescription: 'Must be a valid IPv4 CIDR block'
+  
+  PublicSubnet2Cidr:
+    Type: String
+    Description: 'CIDR block for public subnet 2 (only used if creating new VPC)'
+    Default: '10.4.2.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    ConstraintDescription: 'Must be a valid IPv4 CIDR block'
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0e65a95c79775d1b6
+    us-west-2:
+      AMI: ami-0d0a2d26f80b645c2
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "SSH Key Configuration"
+        Parameters:
+          - KeyPairOption
+          - ExistingKeyPairName
+          - NewKeyPairName
+      - Label:
+          default: "VPC Configuration"
+        Parameters:
+          - VpcOption
+      - Label:
+          default: "Existing VPC Settings (only used if VpcOption is 'use-existing')"
+        Parameters:
+          - ExistingVpcId
+          - ExistingSubnetId
+          - UseExistingSecurityGroup
+          - ExistingSecurityGroupId
+      - Label:
+          default: "New VPC Settings (only used if VpcOption is 'create-new')"
+        Parameters:
+          - VpcCidrBlock
+          - PublicSubnet1Cidr
+          - PublicSubnet2Cidr
+      - Label:
+          default: "EC2 Configuration"
+        Parameters:
+          - Ec2InstanceType
+    ParameterLabels:
+      VpcOption:
+        default: "VPC Option"
+      ExistingVpcId:
+        default: "Existing VPC"
+      ExistingSubnetId:
+        default: "Existing Subnet"
+      VpcCidrBlock:
+        default: "New VPC CIDR Block"
+      PublicSubnet1Cidr:
+        default: "Public Subnet 1 CIDR"
+      PublicSubnet2Cidr:
+        default: "Public Subnet 2 CIDR"
+
+Conditions:
+  CreateNewVPC: !Equals [!Ref VpcOption, 'create-new']
+  UseExistingVPC: !Equals [!Ref VpcOption, 'use-existing']
+  UseExistingKeyPair: !Equals [!Ref KeyPairOption, 'use-existing']
+  CreateNewKeyPair: !Equals [!Ref KeyPairOption, 'create-new']
+  NoKeyPair: !Equals [!Ref KeyPairOption, 'none']
+  HasKeyPair: !Not [!Condition NoKeyPair]
+  CreateSecurityGroup: !Not [!And [!Condition UseExistingVPC, !Equals [!Ref UseExistingSecurityGroup, 'yes']]]
+  UseExistingSG: !And [!Condition UseExistingVPC, !Equals [!Ref UseExistingSecurityGroup, 'yes']]
+  HasValidExistingSecurityGroup: !And 
+    - !Condition UseExistingSG
+    - !Not [!Equals [!Ref ExistingSecurityGroupId, 'sg-placeholder']]
+
+Rules:
+  ValidateNewKeyPairConfiguration:
+    RuleCondition: !Equals [!Ref KeyPairOption, 'create-new']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref NewKeyPairName, '']]
+        AssertDescription: "When creating a new key pair, you must provide a name."
+  
+  ValidateExistingSecurityGroupConfiguration:
+    RuleCondition: !And
+      - !Equals [!Ref VpcOption, 'use-existing']
+      - !Equals [!Ref UseExistingSecurityGroup, 'yes']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ExistingSecurityGroupId, 'sg-placeholder']]
+        AssertDescription: "When using an existing security group, you must select a valid security group ID."
+
+Resources:
+  # EC2 Key Pair (if creating new)
+  NewKeyPair:
+    Type: AWS::EC2::KeyPair
+    Condition: CreateNewKeyPair
+    Properties:
+      KeyName: !Ref NewKeyPairName
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-keypair'
+
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateNewVPC
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateNewVPC
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      # Let AWS choose the AZ to avoid capacity issues
+      # AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet-1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      # Let AWS choose the AZ to avoid capacity issues
+      # AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet-2'
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateNewVPC
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNewVPC
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNewVPC
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # EC2 Security Group
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateSecurityGroup
+    Properties:
+      GroupDescription: Security group for NKI-Llama EC2 instance
+      VpcId: !If [CreateNewVPC, !Ref VPC, !Ref ExistingVpcId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: Allow SSH access
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-security-group'
+
+  # IAM Role for EC2
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ec2-role'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+
+  # EC2 Instance
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      InstanceType: !Ref Ec2InstanceType
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      KeyName: !If 
+        - HasKeyPair
+        - !If 
+          - UseExistingKeyPair
+          - !Ref ExistingKeyPairName
+          - !Ref NewKeyPair
+        - !Ref 'AWS::NoValue'
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 800
+            VolumeType: gp3
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !If 
+            - CreateNewVPC
+            - !Ref PublicSubnet1
+            - !Ref ExistingSubnetId
+          GroupSet:
+            - !If 
+              - HasValidExistingSecurityGroup
+              - !Ref ExistingSecurityGroupId
+              - !Ref SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-nki-llama'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -x
+          
+          # Update system
+          sudo apt-get update
+          sudo apt-get upgrade -y
+          
+          # Install git
+          sudo apt-get install git -y
+          
+          # Clone the repository with agents branch
+          cd /home/ubuntu
+          git clone https://github.com/aws-neuron/nki-llama.git
+
+Outputs:
+  VpcId:
+    Description: 'VPC ID'
+    Value: !If [CreateNewVPC, !Ref VPC, !Ref ExistingVpcId]
+
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !If [CreateNewVPC, !Ref PublicSubnet1, 'Using existing subnet']
+    Condition: CreateNewVPC
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !If [CreateNewVPC, !Ref PublicSubnet2, 'Using existing subnet']
+    Condition: CreateNewVPC
+
+  EC2InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref EC2Instance
+
+  EC2PublicIP:
+    Description: 'EC2 Instance Public IP'
+    Value: !GetAtt EC2Instance.PublicIp
+
+  EC2PrivateIP:
+    Description: 'EC2 Instance Private IP'
+    Value: !GetAtt EC2Instance.PrivateIp
+
+  SecurityGroupId:
+    Description: 'Security Group ID'
+    Value: !If [HasValidExistingSecurityGroup, !Ref ExistingSecurityGroupId, !Ref SecurityGroup]
+
+  SSHCommand:
+    Description: 'SSH connection information'
+    Value: !If
+      - NoKeyPair
+      - !Sub 'No SSH key configured. Use AWS Systems Manager Session Manager: aws ssm start-session --target ${EC2Instance}'
+      - !If
+        - UseExistingKeyPair
+        - !Sub 'ssh -i <path-to-your-${ExistingKeyPairName}-key> ubuntu@${EC2Instance.PublicIp}'
+        - !Sub 'ssh -i <path-to-your-${NewKeyPairName}-key> ubuntu@${EC2Instance.PublicIp}'
+
+  KeyPairInfo:
+    Description: 'Key pair information'
+    Value: !If
+      - NoKeyPair
+      - 'No key pair configured - use SSM Session Manager for access'
+      - !If
+        - UseExistingKeyPair
+        - !Sub 'Using existing key pair: ${ExistingKeyPairName}'
+        - !Sub 'Created new key pair: ${NewKeyPairName} (Download private key from EC2 console within 24 hours!)' 
+
+  ImportantNote:
+    Description: 'IMPORTANT - Read this for new key pairs'
+    Value: !If
+      - CreateNewKeyPair
+      - 'CRITICAL: You must download the private key from the EC2 console immediately! Go to EC2 > Key Pairs, find your key, and download it. This is the ONLY time you can download it!'
+      - 'N/A'
+    Condition: CreateNewKeyPair
