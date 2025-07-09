@@ -10,7 +10,7 @@ You're about to embark on an exciting challenge to optimize LLaMA models using A
 
 We've created three specialized guides based on your optimization focus:
 
-### 1. 🏋️ [Fine-tuning Only Guide](./docs/fine-tuning.md)
+### 1. 🏋️ [Fine-tuning Guide](./docs/fine-tuning.md)
 **Perfect for teams focusing on training optimization**
 - Optimize Model FLOP Utilization (MFU) during training
 - Implement NKI kernels for training operations
