@@ -37,8 +37,8 @@ We've created three specialized guides based on your optimization focus:
 
 | AWS Region | Launch CloudFormation Stack |
 |:-----------|:----------------------------|
-| us-east-1 (N. Virginia) |<a href="https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=nki-llama&templateURL=https://nki-llama-cfn.s3.amazonaws.com/nki-llama-stack.yaml" target="_blank">Launch stack</a> |
-| us-west-2 (Oregon) |<a href="https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=nki-llama&templateURL=https://nki-llama-cfn.s3.amazonaws.com/nki-llama-stack.yaml" target="_blank">Launch stack</a> |
+| us-east-1 (N. Virginia) |<a href="https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=hackathon&templateURL=" target="_blank">Launch stack</a> |
+| us-west-2 (Oregon) |<a href="https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=hackathon&templateURL=" target="_blank">Launch stack</a> |
 
 **Note**: Create your SSH key pair first in EC2 → Key Pairs for easy download!
 
