@@ -103,11 +103,6 @@ Score = Accuracy × Performance_Gains × (1 + NKI_Coverage)
 - **AMI**: Deep Learning AMI Neuron (Ubuntu 22.04) 20250520
 - **Pre-installed**: Neuron SDK 2.23.0, PyTorch, NeuronX
 
-### Support
-- Create issues in the repository for technical questions
-- Check existing issues for common problems
-- Use the `#nki-llama` channel in the hackathon Slack
-
 ## 💡 Tips for Success
 
 1. **Start Simple**: Get the baseline working before optimizing
