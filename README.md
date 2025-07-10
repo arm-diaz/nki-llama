@@ -8,23 +8,30 @@ You're about to embark on an exciting challenge to optimize LLaMA models using A
 
 ## 📚 Choose Your Path
 
-We've created three specialized guides based on your optimization focus:
+We've created four specialized guides based on your optimization focus:
 
-### 1. 🏋️ [Fine-tuning Guide](./docs/fine-tuning.md)
-**Perfect for teams focusing on training optimization**
-- Optimize Model FLOP Utilization (MFU) during training
-- Implement NKI kernels for training operations
-- Achieve high throughput with NeuronX Distributed
-- **Score Focus**: Training performance metrics
+### 1. ⚡ [Flash Self-Attention Kernel Optimization Guide](./docs/self-attention.md)
+**Great for teams to get started with kernel optimizations**
+- Increase performance gains running Flash forward and backward kernels
+- Analyze performance and numerical computation results from implemented kernels
+- Further optimize attention kernels
+- **Score Focus**: Performance and Numerical Unit Tests
 
-### 2. ⚡ [Inference with NKI Guide](./docs/inference.md)
+### 2. 🚀 [Inference with NKI Guide](./docs/inference.md)
 **Ideal for teams targeting inference performance**
 - Minimize latency with NKI-optimized kernels
 - Maximize throughput for production serving
 - Implement custom kernels for attention, normalization, and more
 - **Score Focus**: Inference latency and throughput
 
-### 3. 🎯 [Complete Pipeline Guide](./docs/complete-pipeline.md)
+### 3. 🏋️ [Fine-tuning Guide](./docs/fine-tuning.md)
+**Perfect for teams focusing on training optimization**
+- Optimize Model FLOP Utilization (MFU) during training
+- Implement NKI kernels for training operations
+- Achieve high throughput with NeuronX Distributed
+- **Score Focus**: Training performance metrics
+
+### 4. 🎯 [Complete Pipeline Guide](./docs/complete-pipeline.md)
 **For teams aiming for the highest overall score**
 - Combine training and inference optimizations
 - Implement shared NKI kernels across both phases
