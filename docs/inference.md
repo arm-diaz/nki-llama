@@ -33,9 +33,17 @@ Deploy the NKI-LLAMA inference environment using AWS CloudFormation with one cli
 
 ### Deployment Steps
 
-1. **Click** on one of the "Launch stack" links above for your preferred region.
+1. **Download the CloudFormation template**: 
+   - Click here to download: [deployment.yaml](../deployment/deployment.yaml)
 
-2. **Configure the stack:**
+2. **Click** on one of the CloudFormation Console links above for your preferred region.
+
+3. **Upload the template**:
+   - Choose **Upload a template file**
+   - Click **Choose file** and select the downloaded `deployment.yaml`
+   - Click **Next**
+
+4. **Configure the stack:**
    - **Stack name**: Keep default or customize (e.g., `nki-llama-inference`)
    - **KeyPairOption**: Choose `use-existing` (recommended - create key in EC2 console first)
    - **ExistingKeyPairName**: Select your key from dropdown (see note below)
@@ -45,14 +53,14 @@ Deploy the NKI-LLAMA inference environment using AWS CloudFormation with one cli
    
    **Note**: For easy key download, first create a key pair in EC2 → Key Pairs → Create key pair, download it, then return here and select it from the dropdown. Alternatively, choose `none` to use SSM Session Manager without keys.
 
-3. **Configure stack options**: Leave all values as default and click **Next**
+5. **Configure stack options**: Leave all values as default and click **Next**
 
-4. **Review and create:**
+6. **Review and create:**
    - Check the box: "I acknowledge that AWS CloudFormation might create IAM resources"
    - Click **Create stack**
    - Stack creation takes ~5-10 minutes
 
-5. **Access your instance:**
+7. **Access your instance:**
    - Go to CloudFormation → Select your stack → **Outputs** tab
    - Use **SSHCommand** for SSH access or **EC2InstanceId** for SSM
    - For SSM: `aws ssm start-session --target <instance-id>`
