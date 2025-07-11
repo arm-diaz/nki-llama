@@ -273,211 +273,7 @@ def nki_attention_kernel(q, k, v, mask=None, training=False):
 3. **Speculative Decoding**: Parallel token generation
 4. **Quantization**: INT8/INT4 inference
 
-## 📊 Performance Monitoring Dashboard
-
-### Unified Monitoring Script
-Create a monitoring script to track both phases:
-
-```bash
-#!/bin/bash
-# monitor.sh
-
-echo "=== NKI-LLAMA Performance Monitor ==="
-
-# Training metrics
-if pgrep -f "finetune" > /dev/null; then
-    echo "📊 Training Status:"
-    tail -n 20 logs/nki-llama_*.log | grep -E "(loss|throughput|mfu)"
-fi
-
-# Inference metrics
-if pgrep -f "inference" > /dev/null; then
-    echo "📊 Inference Status:"
-    tail -n 10 src/inference/benchmark_inference.json
-fi
-
-# Device utilization
-echo "📊 Device Utilization:"
-neuron-top -n 1
-
-# Memory usage
-echo "📊 Memory Status:"
-free -h
-```
-
-## 🏗️ Architecture Best Practices
-
-### 1. Kernel Reusability
-Design kernels that work for both training and inference:
-
-```python
-class NKIOptimizedLayer(nn.Module):
-    def __init__(self, config, training_mode=True):
-        super().__init__()
-        self.training_mode = training_mode
-        self.config = config
-        
-    def forward(self, x):
-        if self.config.use_nki:
-            return nki_kernel(x, training=self.training_mode)
-        return standard_implementation(x)
-```
-
-### 2. Configuration Management
-Unified configuration for both phases:
-
-```yaml
-# config.yaml
-model:
-  name: llama-3-8b
-  use_nki: true
-  
-training:
-  batch_size: 8
-  learning_rate: 5e-5
-  nki_kernels:
-    - rmsnorm
-    - attention
-    - linear
-    
-inference:
-  batch_size: 1
-  max_length: 2048
-  nki_kernels:
-    - rmsnorm
-    - attention
-    - linear
-    - kv_cache
-```
-
-### 3. Progressive Optimization
-Start simple and add complexity:
-
-1. **Baseline**: Get everything working without NKI
-2. **Single Kernel**: Add one NKI kernel (e.g., RMSNorm)
-3. **Core Kernels**: Add attention and linear layers
-4. **Advanced**: Implement fusion and specialized kernels
-
-## 🎯 Scoring Optimization Strategy
-
-### Weight Distribution
-For maximum score with all three components:
-
-```python
-# Recommended weight distribution
-WEIGHTS = {
-    "training": 0.33,
-    "inference": 0.33,
-    "reasoning": 0.34
-}
-```
-
-### Focus Areas by Score Impact
-
-#### High Impact (>20% score improvement)
-1. **Attention Optimization**: Both training and inference
-2. **Linear Layer Fusion**: Combine with activation functions
-3. **Memory Access Patterns**: Optimize for Neuron architecture
-
-#### Medium Impact (10-20% improvement)
-1. **Normalization Layers**: RMSNorm, LayerNorm
-2. **Gradient Operations**: Training-specific
-3. **KV Cache**: Inference-specific
-
-#### Low Impact (<10% improvement)
-1. **Activation Functions**: Unless fused with other ops
-2. **Element-wise Operations**: Minor gains
-3. **Data Loading**: Already optimized in framework
-
-## 🛠️ Development Workflow
-
-### Iterative Development Cycle
-```bash
-# 1. Implement kernel
-nano src/kernels/my_nki_kernel.py
-
-# 2. Test in isolation
-python test_kernel.py
-
-# 3. Integrate into model
-nano src/llama.py
-
-# 4. Benchmark improvement
-./nki-llama inference benchmark --seq-len 512
-
-# 5. Profile and optimize
-neuron-profile view profiles/
-```
-
-### Continuous Integration Testing
-```python
-# test_suite.py
-import unittest
-
-class NKIKernelTests(unittest.TestCase):
-    def test_rmsnorm_accuracy(self):
-        # Compare NKI vs PyTorch implementation
-        pass
-        
-    def test_attention_performance(self):
-        # Verify speedup
-        pass
-        
-    def test_training_convergence(self):
-        # Ensure training still converges
-        pass
-```
-
-## 📈 Results Analysis
-
-### Performance Tracking
-Track improvements across iterations:
-
-```python
-# track_performance.py
-import json
-import matplotlib.pyplot as plt
-
-def plot_improvements(baseline, optimized):
-    metrics = ['training_mfu', 'inference_throughput', 'reasoning_accuracy']
-    improvements = [(optimized[m] - baseline[m]) / baseline[m] * 100 
-                   for m in metrics]
-    
-    plt.bar(metrics, improvements)
-    plt.ylabel('Improvement (%)')
-    plt.title('NKI Optimization Impact')
-    plt.savefig('optimization_impact.png')
-```
-
-### Score Breakdown Analysis
-```bash
-# Analyze score components
-python src/handler.py \
-    --inference-results benchmark_inference.json \
-    --analyze-components \
-    --output score_analysis.json
-```
-
 ## 🐛 Common Integration Issues
-
-### Environment Conflicts
-```bash
-# Issue: Package version mismatch between environments
-# Solution: Use separate conda environments
-conda create -n nki-training python=3.10
-conda create -n nki-inference python=3.10
-```
-
-### Model Compatibility
-```bash
-# Issue: Model trained with one config, inference with another
-# Solution: Always save and load full configuration
-torch.save({
-    'model_state_dict': model.state_dict(),
-    'config': config,
-    'nki_kernels': enabled_kernels
-}, 'checkpoint.pt')
-```
 
 ### Cache Conflicts
 ```bash
@@ -493,14 +289,9 @@ rm -rf ~/.cache/neuron
 - **Week 1**: Get baseline working, understand the code
 - **Week 2**: Implement core NKI kernels
 - **Week 3**: Optimize and fine-tune
-- **Final days**: Polish, document, prepare presentation
+- **Final days**: Polish, document, prepare submission
 
-### 2. Collaboration Strategy
-- **Frontend**: One member on training optimizations
-- **Backend**: One member on inference optimizations
-- **Integration**: One member on testing and benchmarking
-
-### 3. Documentation
+### 2. Documentation
 Keep detailed logs of:
 - Kernel implementations
 - Performance improvements
@@ -523,7 +314,6 @@ tmux -a -t training "cd ~/nki-llama" Enter
 tmux -a -t training "./nki-llama finetune all 2>&1 | tee training.log" Enter
 
 # Wait for training to reach a checkpoint
-sleep 3600  # Adjust based on your training time
 
 # Inference phase
 tmux new -d -s inference
@@ -535,10 +325,6 @@ tmux -a -t inference "./nki-llama inference benchmark 2>&1 | tee inference.log" 
 tmux new -d -s reasoning
 tmux -a -t reasoning "source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate" Enter
 tmux -a -t reasoning "./nki-llama/src/inference/scripts/reasoning-bench-lm-eval.sh" Enter
-
-# Monitor all sessions
-tmux new -s monitor
-watch -n 10 './monitor.sh'
 ```
 
 ## 📚 Resources
