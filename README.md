@@ -52,7 +52,7 @@ We've created four specialized guides based on your optimization focus:
 #### Deployment Steps
 
 1. **Download the CloudFormation template**: 
-   - Click here to download: [deployment.yaml](../deployment/deployment.yaml)
+   - Click here to download: [deployment.yaml](./deployment/deployment.yaml)
 
 2. **Click** on one of the CloudFormation Console links above for your preferred region.
 
