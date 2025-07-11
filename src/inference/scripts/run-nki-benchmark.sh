@@ -31,6 +31,13 @@ RETRY_FAILED="${RETRY_FAILED:-false}"
 # Cache paths
 NEURON_CACHE_DIR="/var/tmp/neuron-compile-cache"
 
+# Load model environment variables if available
+MODEL_ENV_FILE="${SCRIPT_DIR}/model_env.sh"
+if [ -f "$MODEL_ENV_FILE" ]; then
+    echo -e "${BLUE}Loading model environment from: $MODEL_ENV_FILE${NC}"
+    source "$MODEL_ENV_FILE"
+fi
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in

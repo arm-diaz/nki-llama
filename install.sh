@@ -61,8 +61,10 @@ if [[ ! -f "${INSTALL_DIR}/.env" ]]; then
         cat > "${INSTALL_DIR}/.env" << 'EOF'
 # NKI-LLAMA Configuration
 HF_TOKEN=
-MODEL_ID=meta-llama/Meta-Llama-3-8B
-MODEL_NAME=llama-3-8b
+MODEL_ID_8B=meta-llama/Meta-Llama-3-8B
+MODEL_NAME_8B=llama-3-8b
+MODEL_ID_1B=meta-llama/Llama-3.2-1B
+MODEL_NAME_1B=llama-3-2-1b
 TENSOR_PARALLEL_SIZE=8
 INFERENCE_PORT=8080
 MAX_MODEL_LEN=2048
