@@ -136,22 +136,37 @@ Refer to the `attention.py` file for details on the kernel implementation. This 
 ### Step 3: Run the Flash Self-Attention Kernel Unit Tests
 ```bash
 # Run the unit tests
-cd ~/nki-llama/src/self-attention/tests
+cd ~/nki-llama/src/self-attention/scripts
 
-# Run all forward and backward tests with full verbosity
-pytest test_flash_attn_*.py -v -s
+# Run the comprehensive benchmark script
+./self-attention_benchmark.sh 
 
 # Run specific test suite
-pytest test_flash_attn_fwd.py -v -s
-pytest test_flash_attn_bwd.py -v -s
+pytest ../tests/test_flash_attn_fwd.py -v -s
+pytest ../tests/test_flash_attn_bwd.py -v -s
 
-# Performance tests only
-pytest -k "perf" -v -s
-# Numerical accuracy tests only  
-pytest -k "numerical" -v -s
-# Simulation tests only
-pytest -m simulation -v -s
 ```
+
+### Step 4: Understand the Scoring Mechanism
+
+The benchmark calculates a combined score based on the following formula:
+
+```
+final_score = accuracy * latency_improvement * throughput_improvement * (1.0 + nki_flop_ratio)
+```
+
+Where:
+- `accuracy`: Binary value (1.0 or 0.0) indicating if numerical tests pass
+- `latency_improvement`: Ratio of baseline latency to measured latency
+- `throughput_improvement`: Inversely proportional to latency (higher is better)
+- `nki_flop_ratio`: Ratio of operations executed on NKI hardware (hardware utilization)
+
+The NKI FLOP ratio is automatically calculated based on the kernel characteristics, considering:
+- Matrix multiplication operations (highly accelerated on NKI)
+- Softmax operations (partially accelerated)
+- Batch size, sequence length, and head dimension effects on hardware utilization
+
+This scoring mechanism rewards both correctness and performance improvements, with a bonus for efficient hardware utilization.
 
 ## 🧪 Test Categories
 
@@ -178,6 +193,41 @@ pytest -m simulation -v -s
    V tensor:     3072.00 MB
    Total Input:  9216.00 MB
    Est. Peak:    18432.00 MB (2x for intermediate)
+   
+🔢 NKI FLOP RATIO: 0.8734
+   Calculated NKI FLOP ratio represents the percentage of operations
+   that can be accelerated by the NKI hardware.
+```
+
+**Performance Metrics JSON:**
+The benchmark generates a detailed JSON file with accumulated metrics:
+```json
+{
+  "timestamp": "2025-07-14T18:45:23Z",
+  "forward": {
+    "latency": 12500000,
+    "base_latency": 15100000000,
+    "latency_improvement": 1208.00,
+    "throughput_improvement": 1208.00,
+    "numerical_accuracy": 1.0,
+    "score": 1459264.00
+  },
+  "backward": {
+    "latency": 41482,
+    "base_latency": 117000,
+    "latency_improvement": 2.82,
+    "throughput_improvement": 2.82,
+    "numerical_accuracy": 1.0,
+    "score": 7.95
+  },
+  "combined": {
+    "forward_weight": 0.4,
+    "backward_weight": 0.6,
+    "nki_flop_ratio": 0.87,
+    "raw_score": 583710.37,
+    "score": 1091538.39
+  }
+}
 ```
 
 ### Numerical Accuracy Tests (`test_*_numerical`)

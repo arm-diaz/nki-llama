@@ -98,24 +98,70 @@ Run the tests to validate performance and numerical accuracy:
 
 ```bash
 # Navigate to the tests directory
-cd tests
+cd nki-llama/src/self-attention/scripts
 
 # Run all tests
-pytest test_flash_attn_*.py -v -s
+./self-attention_benchmark.sh 
 
 # Run specific test suites
-pytest test_flash_attn_fwd.py -v -s  # Forward pass tests
-pytest test_flash_attn_bwd.py -v -s  # Backward pass tests
-
-# Run only performance tests
-pytest -k "perf" -v -s
-
-# Run only numerical accuracy tests
-pytest -k "numerical" -v -s
-
-# Run simulation tests
-pytest -m simulation -v -s
+pytest ../tests/test_flash_attn_fwd.py -v -s  # Forward pass tests
+pytest ../tests/test_flash_attn_bwd.py -v -s  # Backward pass tests
 ```
+
+### Benchmarking
+
+The module includes a comprehensive benchmarking script that evaluates both forward and backward passes:
+
+```bash
+# Run the benchmark script
+./scripts/self-attention_benchmark.sh
+```
+
+The benchmark calculates a combined score based on the following formula:
+
+```
+final_score = accuracy * latency_improvement * throughput_improvement * (1.0 + nki_flop_ratio)
+```
+
+Where:
+- `accuracy`: Binary value (1.0 or 0.0) indicating if numerical tests pass
+- `latency_improvement`: Ratio of baseline latency to measured latency
+- `throughput_improvement`: Inversely proportional to latency (higher is better)
+- `nki_flop_ratio`: Ratio of operations executed on NKI hardware (hardware utilization)
+
+#### NKI FLOP Ratio Calculation
+
+The NKI FLOP ratio is automatically calculated based on the kernel characteristics:
+
+```python
+def calculate_nki_flop_ratio(bs, nheads, seq_len, d, is_backward=False):
+    # Calculate total FLOPs for attention operations
+    qk_bmm_flops = 2 * bs * nheads * seq_len * seq_len * d  # Q*K^T matrix multiply
+    attn_v_bmm_flops = 2 * bs * nheads * seq_len * seq_len * d  # Attention * V matrix multiply
+    softmax_flops = bs * nheads * seq_len * seq_len * 5  # Softmax operations
+    
+    # Additional operations for backward pass
+    if is_backward:
+        dq_flops = 2 * bs * nheads * seq_len * seq_len * d  # dQ calculation
+        dk_flops = 2 * bs * nheads * seq_len * seq_len * d  # dK calculation
+        dv_flops = 2 * bs * nheads * seq_len * seq_len * d  # dV calculation
+        dsoftmax_flops = bs * nheads * seq_len * seq_len * 10  # Softmax gradient
+        # Calculate total and NKI-accelerated operations
+        # ...
+    
+    # Apply adjustments based on empirical observations
+    # Larger batch sizes and head dimensions tend to have better utilization
+    # ...
+    
+    return adjusted_ratio  # Between 0.0 and 1.0
+```
+
+This calculation considers:
+- Matrix multiplication operations (highly accelerated on NKI)
+- Softmax operations (partially accelerated)
+- Batch size, sequence length, and head dimension effects on hardware utilization
+
+The benchmark generates detailed logs and a JSON results file in the `logs/self_attention/` directory, including accumulated metrics across multiple test runs.
 
 ## Optimization Opportunities
 

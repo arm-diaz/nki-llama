@@ -15,7 +15,7 @@ We've created four specialized guides based on your optimization focus:
 - Increase performance gains running Flash forward and backward kernels
 - Analyze performance and numerical computation results from implemented kernels
 - Further optimize attention kernels
-- **Score Focus**: Performance and Numerical Unit Tests
+- **Score Focus**: Self-Attention test latency and correctness
 
 ### 2. 🚀 [Inference with NKI Guide](./docs/inference.md)
 **Ideal for teams targeting inference performance**

@@ -6,13 +6,14 @@ import sys
 import os
 import logging
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from attention import flash_attn_bwd
 from neuronxcc.nki import benchmark, baremetal, simulate_kernel
 import neuronxcc.nki.language as nl
+from config import update_config, load_config, add_test_result, calculate_nki_flop_ratio
 
 # Configure logging for verbose output
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -319,6 +320,49 @@ class TestAttention:
         # Get and display results
         latency_res = bench_func_.benchmark_result.nc_latency
         p50_latency = print_performance_metrics(latency_res, latency, "Flash Attention Backward")
+        
+        # Update performance metrics in config file
+        print("\n📊 Adding latency metrics to config file...")
+        # Initialize variables to track total latency
+        achieved_latency = p50_latency if p50_latency is not None else 0
+        
+        # If p50_latency is None, try to get mean latency
+        if achieved_latency == 0 and hasattr(latency_res, 'mean'):
+            achieved_latency = latency_res.mean
+            print(f"   Using mean latency: {achieved_latency:,} ns")
+        
+        # Update the config variables if we have valid latency data
+        if achieved_latency > 0:
+            # Calculate NKI FLOP ratio for this kernel configuration
+            nki_flop_ratio = calculate_nki_flop_ratio(
+                bs=bs, 
+                nheads=nheads, 
+                seq_len=seqlen, 
+                d=d, 
+                is_backward=True
+            )
+            print(f"   Calculated NKI FLOP ratio: {nki_flop_ratio:.4f}")
+            
+            # Create test parameters dictionary for logging
+            test_params = {
+                "batch_size": bs,
+                "num_heads": nheads,
+                "seq_len": seqlen,
+                "head_dim": d,
+                "dtype": str(dtype),
+                "nki_flop_ratio": nki_flop_ratio
+            }
+            
+            # Update the NKI FLOP ratio in the config
+            update_config({'NKI_FLOP_RATIO': nki_flop_ratio})
+            
+            # Add the test result to our accumulated metrics
+            update_success = add_test_result('BWD', achieved_latency, latency, test_params)
+            print(f"   Config update {'succeeded' if update_success else 'failed'}")
+            print(f"   Added to BWD_LATENCY_TOTAL: {achieved_latency:,} ns")
+            print(f"   Added to BWD_BASE_LATENCY_TOTAL: {latency:,} ns")
+        else:
+            print("   No valid latency data to update config")
         
         # Final assertion with better error handling
         if p50_latency is not None:
