@@ -6,7 +6,7 @@ set +e
 
 LOG_FILE="bootstrap_$(date +%Y%m%d_%H%M%S).log"
 MAX_RETRIES=3
-REQUIREMENTS_URL="https://raw.githubusercontent.com/aws-neuron/neuronx-distributed-training/master/requirements.txt"
+REQUIREMENTS_URL="https://raw.githubusercontent.com/aws-neuron/neuronx-distributed-training/refs/heads/release_2.23.0/requirements.txt"
 LOCAL_REQUIREMENTS="./cached_requirements.txt"
 
 log_message() {

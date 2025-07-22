@@ -12,7 +12,7 @@ if [ -d "/home/ubuntu/nki-llama/src/fine-tune/neuronx-distributed-training" ]; t
 fi
 
 echo "==== Cloning neuronx-distributed-training repository ===="
-git clone https://github.com/aws-neuron/neuronx-distributed-training.git
+git clone -b release_2.23.0 https://github.com/aws-neuron/neuronx-distributed-training.git
 
 echo "==== Changing to checkpoint converter scripts directory ===="
 cd ~/nki-llama/src/fine-tune/neuronx-distributed-training/examples/checkpoint_converter_scripts

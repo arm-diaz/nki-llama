@@ -3,9 +3,35 @@ set -e
 
 echo "==== Starting Llama model download and conversion script ===="
 
-# Variable names
-MODEL_NAME=none
-HF_WEIGHT_NAME=none
+# Run the instance_type script
+source ~/nki-llama/src/fine-tune/scripts/instance_type.sh
+
+# Check if MODEL_NAME is provided as an argument or environment variable
+if [ -n "$1" ]; then
+    MODEL_NAME="$1"
+elif [ -n "$MODEL_NAME" ]; then
+    # MODEL_NAME already set as environment variable
+    :
+else
+    echo "Error: MODEL_NAME not specified!"
+    echo "Usage: $0 <MODEL_NAME>"
+    echo "   or: export MODEL_NAME=<model_name> && $0"
+    echo ""
+    
+    # Provide recommendations based on instance type
+    if [ "$EC2_INSTANCE_TYPE" == "trn1.2xlarge" ]; then
+        echo "Recommended model for $EC2_INSTANCE_TYPE:"
+        echo "  - llama-3-2_1b"
+    elif [ "$EC2_INSTANCE_TYPE" == "trn1.32xlarge" ]; then
+        echo "Recommended model for $EC2_INSTANCE_TYPE:"
+        echo "  - llama-3-1_8b"
+    else
+        echo "Recommended model names:"
+        echo "  - llama-3-2_1b (for smaller instances)"
+        echo "  - llama-3-1_8b (for larger instances)"
+    fi
+    exit 1
+fi
 
 # Check if HF_TOKEN is set
 if [ -z "$HF_TOKEN" ]; then
@@ -14,35 +40,30 @@ if [ -z "$HF_TOKEN" ]; then
     exit 1
 fi
 
-# Run the instance_type script
-./nki-llama/src/fine-tune/scripts/instance_type.sh
+# Check if MODEL_ID is set
+if [ -z "$MODEL_ID" ]; then
+    echo "Error: MODEL_ID environment variable is not set!"
+    echo "Please set MODEL_ID to the Hugging Face model identifier"
+    echo "Examples:"
+    echo "  - For llama-3-2_1b: export MODEL_ID=meta-llama/Llama-3.2-1B"
+    echo "  - For llama-3-1_8b: export MODEL_ID=meta-llama/Meta-Llama-3-8B"
+    exit 1
+fi
 
-# Check the instance type to set the variables for the model download
-if ["$EC2_INSTANCE_TYPE" == "trn1.2xlarge"]; then
-    # Check if MODEL_ID_1B is set
-    if [ -z "$MODEL_ID_1B" ]; then
-        echo "Error: MODEL_ID_1B environment variable is not set!"
-        echo "Please make sure MODEL_ID_1B is defined in your .env file"
-        exit 1
-    fi
+# Set HF_WEIGHT_NAME based on MODEL_NAME
+HF_WEIGHT_NAME="${MODEL_NAME}_hf_weights_bin"
 
-    MODEL_NAME=llama-3-2_1b
-    HF_WEIGHT_NAME=llama3_2-1b_hf_weights_bin
+echo "🚀 Model: Processing $MODEL_NAME..."
+echo "   Instance Type: $EC2_INSTANCE_TYPE"
+echo "   HF Model ID: $MODEL_ID"
+echo "   HF Weight Name: $HF_WEIGHT_NAME"
 
-    echo "🚀 Model: Downloading Llama-3.2 1B..."
-else if ["$EC2_INSTANCE_TYPE" == "trn1.32xlarge"]: then
-    # Check if MODEL_ID_8B is set
-    if [ -z "$MODEL_ID_8B" ]; then
-        echo "Error: MODEL_ID_8B environment variable is not set!"
-        echo "Please make sure MODEL_ID_8B is defined in your .env file"
-        exit 1
-    fi
-
-    MODEL_NAME=llama-3-1_8b
-    HF_WEIGHT_NAME=llama3_1-8b_hf_weights_bin
-
-    echo "🚀 Model: Downloading Llama-3 8B..."
-
+# Optional: Warn if model seems mismatched with instance type
+if [ "$EC2_INSTANCE_TYPE" == "trn1.2xlarge" ] && [[ "$MODEL_NAME" == *"8b"* ]]; then
+    echo "⚠️  Warning: Using a large model (8B) on a small instance (trn1.2xlarge) may cause performance issues"
+elif [ "$EC2_INSTANCE_TYPE" == "trn1.32xlarge" ] && [[ "$MODEL_NAME" == *"1b"* ]]; then
+    echo "ℹ️  Note: Using a small model (1B) on a large instance (trn1.32xlarge) - consider using a larger model for better resource utilization"
+fi
 
 echo "==== Changing to fine-tune workspace ===="
 # Go to your fine-tune workspace
@@ -52,8 +73,8 @@ echo "Current directory: $(pwd)"
 echo "==== Setting path variables ===="
 # Paths
 export TOKENIZER_DIR=~/nki-llama/src/fine-tune/model_assets/llama_tokenizer
-export MODEL_DIR=~/nki-llama/src/fine-tune/model_assets/MODEL_NAME
-export BIN_MODEL_DIR=~/nki-llama/src/fine-tune/model_assets/HF_WEIGHT_NAME
+export MODEL_DIR=~/nki-llama/src/fine-tune/model_assets/$MODEL_NAME
+export BIN_MODEL_DIR=~/nki-llama/src/fine-tune/model_assets/$HF_WEIGHT_NAME
 export CONSOLIDATED_BIN_MODEL_DIR=~/nki-llama/src/fine-tune/model_assets/pckpt/
 
 echo "Tokenizer directory: $TOKENIZER_DIR"
@@ -88,14 +109,10 @@ import os
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from pathlib import Path
 
-instance_type = os.environ.get("EC2_INSTANCE_TYPE")
-if instance == "trn1.2xlarge":
-    model_id = os.environ.get("MODEL_ID", "meta-llama/Llama-3.2-1B")
-elif instance == "trn1.32xlarge":
-    model_id = os.environ.get("MODEL_ID", "meta-llama/Meta-Llama-3-8B")
+model_id = os.environ.get("MODEL_ID")
 tokenizer_dir = os.path.expanduser(os.environ["TOKENIZER_DIR"])
-model_dir     = os.path.expanduser(os.environ["MODEL_DIR"])
-hf_token      = os.environ.get("HF_TOKEN")
+model_dir = os.path.expanduser(os.environ["MODEL_DIR"])
+hf_token = os.environ.get("HF_TOKEN")
 
 # Check if tokenizer exists
 tokenizer_path = Path(tokenizer_dir)

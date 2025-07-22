@@ -276,5 +276,6 @@ compiled_merged_model/
 compiled_model/
 merged_model/
 src/self-attention/config
+requirements.txt.**
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,jupyternotebooks,python

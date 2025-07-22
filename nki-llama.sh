@@ -101,25 +101,6 @@ check_neuron_env() {
     fi
 }
 
-# Check specific environment activation
-check_specific_env() {
-    local required_env="$1"
-    if [[ -z "${VIRTUAL_ENV:-}" ]]; then
-        echo -e "${RED}❌ No virtual environment active${NC}"
-        echo -e "${YELLOW}Please activate: ${CYAN}source ${required_env}/bin/activate${NC}"
-        return 1
-    elif [[ "$VIRTUAL_ENV" != "$required_env" ]]; then
-        echo -e "${RED}❌ Wrong environment active${NC}"
-        echo -e "${YELLOW}Current: ${VIRTUAL_ENV}${NC}"
-        echo -e "${YELLOW}Required: ${required_env}${NC}"
-        echo -e "${YELLOW}Please activate: ${CYAN}source ${required_env}/bin/activate${NC}"
-        return 1
-    else
-        echo -e "${GREEN}✓ Correct environment active${NC}"
-        return 0
-    fi
-}
-
 # Initialize logging
 init_logging() {
     mkdir -p "$NKI_LOGS"
@@ -154,97 +135,204 @@ run_script() {
 # Self-Attention Commands
 ###############################################################################
 
+# Check if self-attention environment is active
+check_self_attention_env() {
+    if [[ -z "${VIRTUAL_ENV:-}" ]]; then
+        echo -e "${RED}❌ No virtual environment active${NC}"
+        echo -e "${YELLOW}Please activate the environment:${NC}"
+        echo -e "${CYAN}source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate${NC}"
+        return 1
+    elif [[ "$VIRTUAL_ENV" == *"pytorch_2_6"* ]]; then
+        echo -e "${GREEN}✓ Self-attention environment active${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  Wrong environment active: ${VIRTUAL_ENV}${NC}"
+        echo -e "${YELLOW}Please activate the correct environment:${NC}"
+        echo -e "${CYAN}source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate${NC}"
+        return 1
+    fi
+}
+
+cmd_self_attention_benchmark() {
+    echo -e "${BOLD}Running self-attention benchmarks...${NC}"
+    
+    # Check environment
+    if ! check_self_attention_env; then
+        return 1
+    fi
+    
+    # Check if we're in tmux
+    if [[ -z "${TMUX:-}" ]]; then
+        echo -e "${YELLOW}⚠️  Not running in tmux. ${BOLD}This is important for benchmarking!${NC}"
+        echo -e "${YELLOW}   Benchmarks can take considerable time to complete.${NC}"
+        echo -e "${YELLOW}   Disconnections will terminate the process.${NC}"
+        echo
+        echo -e "   ${CYAN}tmux new -s self-attention${NC}"
+        echo -e "   ${CYAN}./nki-llama self-attention benchmark${NC}"
+        echo
+        read -p "Continue without tmux? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}Please start tmux with: ${CYAN}tmux new -s self-attention${NC}"
+            exit 0
+        fi
+    fi
+    
+    # Navigate to scripts directory and run benchmark
+    local self_attention_dir="${SCRIPT_DIR}/src/self-attention"
+    
+    if [[ ! -d "$self_attention_dir/scripts" ]]; then
+        echo -e "${RED}❌ Self-attention scripts directory not found: $self_attention_dir/scripts${NC}"
+        return 1
+    fi
+    
+    cd "$self_attention_dir/scripts"
+    
+    if [[ -f "./self-attention_benchmark.sh" ]]; then
+        echo -e "${MAGENTA}▶ Running: self-attention_benchmark.sh${NC}"
+        bash ./self-attention_benchmark.sh "$@"
+    else
+        echo -e "${RED}❌ Benchmark script not found: ./self-attention_benchmark.sh${NC}"
+        return 1
+    fi
+}
+
 cmd_self_attention_test() {
     echo -e "${BOLD}Running self-attention tests...${NC}"
     
     # Check environment
-    if ! check_specific_env "/opt/aws_neuronx_venv_pytorch_2_6"; then
+    if ! check_self_attention_env; then
         return 1
     fi
     
-    # Check if scripts directory exists
-    local SELF_ATTN_SCRIPTS="${SCRIPT_DIR}/src/self-attention/scripts"
-    if [[ ! -d "$SELF_ATTN_SCRIPTS" ]]; then
-        echo -e "${RED}❌ Self-attention scripts directory not found: $SELF_ATTN_SCRIPTS${NC}"
+    local test_type="${1:-all}"
+    shift || true
+    
+    # Navigate to self-attention directory
+    local self_attention_dir="${SCRIPT_DIR}/src/self-attention"
+    
+    if [[ ! -d "$self_attention_dir/tests" ]]; then
+        echo -e "${RED}❌ Self-attention tests directory not found: $self_attention_dir/tests${NC}"
         return 1
     fi
     
-    # Change to scripts directory
-    cd "$SELF_ATTN_SCRIPTS" || {
-        echo -e "${RED}❌ Failed to navigate to self-attention scripts directory${NC}"
-        return 1
-    }
+    cd "$self_attention_dir"
     
-    # Run the benchmark script
-    if [[ -f "./self-attention_benchmark.sh" ]]; then
-        echo -e "${CYAN}Running all self-attention tests...${NC}"
-        bash ./self-attention_benchmark.sh
+    case "$test_type" in
+        all)
+            echo -e "${CYAN}Running all self-attention tests...${NC}"
+            if command -v pytest &> /dev/null; then
+                pytest tests/ -v -s "$@"
+            else
+                echo -e "${RED}❌ pytest not found. Please install pytest.${NC}"
+                return 1
+            fi
+            ;;
+        forward|fwd)
+            echo -e "${CYAN}Running forward pass tests...${NC}"
+            if [[ -f "tests/test_flash_attn_fwd.py" ]]; then
+                pytest tests/test_flash_attn_fwd.py -v -s "$@"
+            else
+                echo -e "${RED}❌ Forward test file not found: tests/test_flash_attn_fwd.py${NC}"
+                return 1
+            fi
+            ;;
+        backward|bwd)
+            echo -e "${CYAN}Running backward pass tests...${NC}"
+            if [[ -f "tests/test_flash_attn_bwd.py" ]]; then
+                pytest tests/test_flash_attn_bwd.py -v -s "$@"
+            else
+                echo -e "${RED}❌ Backward test file not found: tests/test_flash_attn_bwd.py${NC}"
+                return 1
+            fi
+            ;;
+        *)
+            echo -e "${RED}Unknown test type: $test_type${NC}"
+            echo -e "Available: all, forward (fwd), backward (bwd)"
+            return 1
+            ;;
+    esac
+}
+
+cmd_self_attention_run() {
+    echo -e "${BOLD}Running self-attention script...${NC}"
+    
+    # Check environment
+    if ! check_self_attention_env; then
+        return 1
+    fi
+    
+    local script_name="$1"
+    shift || true
+    
+    if [[ -z "$script_name" ]]; then
+        echo -e "${RED}❌ No script specified${NC}"
+        echo -e "Usage: ./nki-llama self-attention run <script_name> [args...]"
+        return 1
+    fi
+    
+    # Navigate to scripts directory
+    local self_attention_dir="${SCRIPT_DIR}/src/self-attention"
+    cd "$self_attention_dir/scripts"
+    
+    if [[ -f "./${script_name}" ]]; then
+        echo -e "${MAGENTA}▶ Running: ${script_name}${NC}"
+        bash "./${script_name}" "$@"
+    elif [[ -f "./${script_name}.sh" ]]; then
+        echo -e "${MAGENTA}▶ Running: ${script_name}.sh${NC}"
+        bash "./${script_name}.sh" "$@"
     else
-        echo -e "${RED}❌ self-attention_benchmark.sh not found${NC}"
+        echo -e "${RED}❌ Script not found: ${script_name}${NC}"
+        echo -e "Available scripts in $self_attention_dir/scripts:"
+        ls -1 *.sh 2>/dev/null || echo "No .sh scripts found"
         return 1
     fi
-    
-    # Return to original directory
-    cd - > /dev/null
 }
 
-cmd_self_attention_test_forward() {
-    echo -e "${BOLD}Running self-attention forward pass tests...${NC}"
+cmd_self_attention_status() {
+    echo -e "${BOLD}Self-Attention Status:${NC}"
     
     # Check environment
-    if ! check_specific_env "/opt/aws_neuronx_venv_pytorch_2_6"; then
-        return 1
+    check_self_attention_env || true
+    echo
+    
+    # Check directories
+    local self_attention_dir="${SCRIPT_DIR}/src/self-attention"
+    
+    echo -e "${BOLD}Directory Structure:${NC}"
+    [[ -d "$self_attention_dir" ]] && echo -e "• Base directory: ${GREEN}✓${NC}" || echo -e "• Base directory: ${RED}✗${NC}"
+    [[ -d "$self_attention_dir/scripts" ]] && echo -e "• Scripts: ${GREEN}✓${NC}" || echo -e "• Scripts: ${RED}✗${NC}"
+    [[ -d "$self_attention_dir/tests" ]] && echo -e "• Tests: ${GREEN}✓${NC}" || echo -e "• Tests: ${RED}✗${NC}"
+    
+    # Check for benchmark script
+    if [[ -f "$self_attention_dir/scripts/self-attention_benchmark.sh" ]]; then
+        echo -e "• Benchmark script: ${GREEN}✓${NC}"
+    else
+        echo -e "• Benchmark script: ${RED}✗${NC}"
     fi
     
-    # Check if tests directory exists
-    local SELF_ATTN_TESTS="${SCRIPT_DIR}/src/self-attention/tests"
-    if [[ ! -d "$SELF_ATTN_TESTS" ]]; then
-        echo -e "${RED}❌ Self-attention tests directory not found: $SELF_ATTN_TESTS${NC}"
-        return 1
+    # Check for test files
+    echo -e "\n${BOLD}Test Files:${NC}"
+    if [[ -f "$self_attention_dir/tests/test_flash_attn_fwd.py" ]]; then
+        echo -e "• Forward tests: ${GREEN}✓${NC}"
+    else
+        echo -e "• Forward tests: ${RED}✗${NC}"
     fi
     
-    # Run forward pass tests
-    echo -e "${CYAN}Running forward pass tests...${NC}"
-    cd "$SELF_ATTN_TESTS" || return 1
-    pytest test_flash_attn_fwd.py -v -s
-    cd - > /dev/null
-}
-
-cmd_self_attention_test_backward() {
-    echo -e "${BOLD}Running self-attention backward pass tests...${NC}"
-    
-    # Check environment
-    if ! check_specific_env "/opt/aws_neuronx_venv_pytorch_2_6"; then
-        return 1
+    if [[ -f "$self_attention_dir/tests/test_flash_attn_bwd.py" ]]; then
+        echo -e "• Backward tests: ${GREEN}✓${NC}"
+    else
+        echo -e "• Backward tests: ${RED}✗${NC}"
     fi
     
-    # Check if tests directory exists
-    local SELF_ATTN_TESTS="${SCRIPT_DIR}/nki-llama/src/self-attention/tests"
-    if [[ ! -d "$SELF_ATTN_TESTS" ]]; then
-        echo -e "${RED}❌ Self-attention tests directory not found: $SELF_ATTN_TESTS${NC}"
-        return 1
+    # Check for pytest
+    if command -v pytest &> /dev/null; then
+        echo -e "\n${BOLD}Dependencies:${NC}"
+        echo -e "• pytest: ${GREEN}✓${NC} ($(pytest --version 2>&1 | head -1))"
+    else
+        echo -e "\n${BOLD}Dependencies:${NC}"
+        echo -e "• pytest: ${RED}✗${NC} (not installed)"
     fi
-    
-    # Run backward pass tests
-    echo -e "${CYAN}Running backward pass tests...${NC}"
-    cd "$SELF_ATTN_TESTS" || return 1
-    pytest test_flash_attn_bwd.py -v -s
-    cd - > /dev/null
-}
-
-cmd_self_attention_all() {
-    echo -e "${BOLD}Running complete self-attention validation...${NC}\n"
-    
-    # Check environment first
-    if ! check_specific_env "/opt/aws_neuronx_venv_pytorch_2_6"; then
-        return 1
-    fi
-    
-    echo -e "${YELLOW}💡 This will run all self-attention tests to validate NKI kernels${NC}"
-    echo -e "${YELLOW}   Tests include forward and backward pass validation${NC}"
-    echo -e "${YELLOW}   This should be run before training or inference${NC}\n"
-    
-    cmd_self_attention_test
 }
 
 ###############################################################################
@@ -329,7 +417,6 @@ cmd_finetune_all() {
     if [[ -z "${TMUX:-}" ]]; then
         echo -e "${YELLOW}⚠️  Not running in tmux. ${BOLD}This is critical for the full pipeline!${NC}"
         echo -e "${YELLOW}   The complete pipeline includes:${NC}"
-        echo -e "${YELLOW}   • Self-attention validation${NC}"
         echo -e "${YELLOW}   • Dependency installation${NC}"
         echo -e "${YELLOW}   • Dataset download${NC}"
         echo -e "${YELLOW}   • Model download${NC}"
@@ -349,9 +436,6 @@ cmd_finetune_all() {
         fi
     fi
     
-    # Run self-attention tests first
-    echo -e "${YELLOW}⚠️  Running self-attention validation before training...${NC}"
-    cmd_self_attention_all && \
     cmd_finetune_deps && \
     cmd_finetune_data && \
     cmd_finetune_model && \
@@ -442,28 +526,13 @@ cmd_inference_benchmark() {
         fi
     fi
     
-    # Run self-attention tests before benchmark
-    echo -e "${YELLOW}⚠️  Running self-attention validation before benchmark...${NC}"
-    if cmd_self_attention_all; then
-        bash "${NKI_INFERENCE_SCRIPTS}/run-nki-benchmark.sh" --mode "$mode" "${args[@]}"
-    else
-        echo -e "${RED}❌ Self-attention tests failed. Please fix issues before running benchmark.${NC}"
-        return 1
-    fi
+    bash "${NKI_INFERENCE_SCRIPTS}/run-nki-benchmark.sh" --mode "$mode" "${args[@]}"
 }
 
 cmd_inference_server() {
     echo -e "${BOLD}Starting vLLM server...${NC}"
-    
-    # Run self-attention tests before server
-    echo -e "${YELLOW}⚠️  Running self-attention validation before starting server...${NC}"
-    if cmd_self_attention_all; then
-        suggest_tmux "vLLM Server" "vllm-server" "inference server"
-        bash "${NKI_INFERENCE_SCRIPTS}/start-server.sh"
-    else
-        echo -e "${RED}❌ Self-attention tests failed. Please fix issues before starting server.${NC}"
-        return 1
-    fi
+    suggest_tmux "vLLM Server" "vllm-server" "inference server"
+    bash "${NKI_INFERENCE_SCRIPTS}/start-server.sh"
 }
 
 ###############################################################################
@@ -480,18 +549,10 @@ cmd_status() {
     echo
     
     echo -e "${BOLD}Self-Attention Status:${NC}"
-    if [[ -d "${SCRIPT_DIR}/nki-llama/src/self-attention" ]]; then
-        echo -e "• Self-attention: ${GREEN}✓${NC}"
-        # Check if tests have been run recently
-        local TEST_LOG=$(find "$NKI_LOGS" -name "*self-attention*" -mtime -1 2>/dev/null | head -1)
-        if [[ -n "$TEST_LOG" ]]; then
-            echo -e "• Recent test: ${GREEN}✓${NC} (within 24h)"
-        else
-            echo -e "• Recent test: ${YELLOW}⚠${NC} (run ./nki-llama self-attention test)"
-        fi
-    else
-        echo -e "• Self-attention: ${RED}✗${NC}"
-    fi
+    local self_attention_dir="${SCRIPT_DIR}/nki-llama/src/self-attention"
+    [[ -d "$self_attention_dir" ]] && echo -e "• Module: ${GREEN}✓${NC}" || echo -e "• Module: ${YELLOW}⚠${NC}"
+    [[ -d "$self_attention_dir/scripts" ]] && echo -e "• Scripts: ${GREEN}✓${NC}" || echo -e "• Scripts: ${YELLOW}⚠${NC}"
+    [[ -d "$self_attention_dir/tests" ]] && echo -e "• Tests: ${GREEN}✓${NC}" || echo -e "• Tests: ${YELLOW}⚠${NC}"
     echo
     
     echo -e "${BOLD}Fine-tuning Status:${NC}"
@@ -610,10 +671,12 @@ show_help() {
     echo
     
     echo -e "${CYAN}Self-Attention Commands:${NC}"
-    echo -e "  ./nki-llama self-attention test         - Run all tests"
-    echo -e "  ./nki-llama self-attention forward      - Test forward pass only"
-    echo -e "  ./nki-llama self-attention backward     - Test backward pass only"
-    echo -e "  ./nki-llama self-attention all          - Complete validation"
+    echo -e "  ./nki-llama self-attention benchmark         - Run all benchmarks"
+    echo -e "  ./nki-llama self-attention test              - Run all tests"
+    echo -e "  ./nki-llama self-attention test forward      - Run forward pass tests"
+    echo -e "  ./nki-llama self-attention test backward     - Run backward pass tests"
+    echo -e "  ./nki-llama self-attention run <script>      - Run specific script"
+    echo -e "  ./nki-llama self-attention status            - Show self-attention status"
     echo
     
     echo -e "${CYAN}Fine-tuning Commands:${NC}"
@@ -660,22 +723,16 @@ show_help() {
     echo
     
     echo -e "${CYAN}Environment Setup:${NC}"
-    echo -e "  Self-attention: source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate"
+    echo -e "  Self-Attention: source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate"
     echo -e "  Fine-tuning:    source ${NEURON_VENV}/bin/activate"
     echo -e "  Inference:      source ${NEURON_INFERENCE_VENV}/bin/activate"
-    echo
-    
-    echo -e "${CYAN}Recommended Workflow:${NC}"
-    echo -e "  1. Run self-attention tests to validate NKI kernels"
-    echo -e "  2. Run fine-tuning or inference as needed"
-    echo -e "  3. Self-attention tests are automatically run before training/inference"
     echo
     
     echo -e "${CYAN}Troubleshooting:${NC}"
     echo -e "  • Always use tmux for long operations (compile, train, benchmark)"
     echo -e "  • If benchmark fails with cache errors, use --clear-cache"
     echo -e "  • Check status to see if compilation cache has failed entries"
-    echo -e "  • Ensure correct environment is activated for self-attention tests"
+    echo -e "  • For self-attention, ensure correct environment is activated"
     echo
 }
 
@@ -711,7 +768,8 @@ EOF
     echo -e "1. Edit .env file with your Hugging Face token"
     echo -e "2. For self-attention testing:"
     echo -e "   ${CYAN}source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate${NC}"
-    echo -e "   ${CYAN}./nki-llama self-attention test${NC}"
+    echo -e "   ${CYAN}tmux new -s self-attention  # ${YELLOW}IMPORTANT: Use tmux!${NC}"
+    echo -e "   ${CYAN}./nki-llama self-attention benchmark${NC}"
     echo -e "3. For fine-tuning:"
     echo -e "   ${CYAN}source ${NEURON_VENV}/bin/activate${NC}"
     echo -e "   ${CYAN}tmux new -s training  # ${YELLOW}IMPORTANT: Use tmux!${NC}"
@@ -727,7 +785,6 @@ EOF
     echo -e "   ${CYAN}./nki-llama inference server${NC}"
     echo
     echo -e "${YELLOW}💡 Pro Tips:${NC}"
-    echo -e "   • Self-attention tests validate NKI kernels before use"
     echo -e "   • Always use tmux for long operations"
     echo -e "   • Check ./nki-llama status for system health"
     echo -e "   • Use --clear-cache if benchmark fails with cache errors"
@@ -746,7 +803,7 @@ main() {
     
     # Initialize logging for actual operations
     case "${1:-help}" in
-        finetune|inference|train|server|clean|self-attention)
+        self-attention|finetune|inference|train|server|clean)
             init_logging
             ;;
     esac
@@ -774,15 +831,24 @@ main() {
             
         # Self-attention commands
         self-attention)
-            subcmd="${1:-all}"
+            subcmd="${1:-benchmark}"
             shift || true
             case "$subcmd" in
-                test|forward|backward|all)
-                    cmd_self_attention_"$subcmd" "$@"
+                benchmark)
+                    cmd_self_attention_benchmark "$@"
+                    ;;
+                test)
+                    cmd_self_attention_test "$@"
+                    ;;
+                run)
+                    cmd_self_attention_run "$@"
+                    ;;
+                status)
+                    cmd_self_attention_status "$@"
                     ;;
                 *)
                     echo -e "${RED}Unknown self-attention command: $subcmd${NC}"
-                    show_help
+                    echo -e "Available: benchmark, test, run, status"
                     ;;
             esac
             ;;
