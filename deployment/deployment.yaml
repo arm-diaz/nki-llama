@@ -345,6 +345,8 @@ Resources:
           # Clone the repository with agents branch
           cd /home/ubuntu
           git clone https://github.com/aws-neuron/nki-llama.git
+          sudo chown -R ubuntu:ubuntu /home/ubuntu/nki-llama/
+          git config --global --add safe.directory /home/ubuntu/nki-llama
 
 Outputs:
   VpcId:

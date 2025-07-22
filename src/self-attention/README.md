@@ -97,6 +97,9 @@ dq, dk, dv = flash_attn_bwd[batch_size, heads](
 Run the tests to validate performance and numerical accuracy:
 
 ```bash
+# Activate python environment
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+
 # Navigate to the tests directory
 cd nki-llama/src/self-attention/scripts
 
