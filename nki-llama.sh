@@ -50,16 +50,132 @@ EOF
     echo -e "${NC}"
 }
 
+# Environment paths
+SELF_ATTENTION_ENV="/opt/aws_neuronx_venv_pytorch_2_6"
+FINETUNE_ENV="${NEURON_VENV:-/opt/aws_neuronx_venv_pytorch_2_6}"
+INFERENCE_ENV="${NEURON_INFERENCE_VENV:-/opt/aws_neuronx_venv_pytorch_2_6_nxd_inference}"
+
+# Enhanced environment checking with activation suggestions
+check_and_suggest_env() {
+    local required_env="$1"
+    local env_name="$2"
+    local env_path="$3"
+    
+    # Check if any virtual environment is active
+    if [[ -z "${VIRTUAL_ENV:-}" ]]; then
+        echo -e "${RED}❌ No virtual environment active${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${YELLOW}⚠️  ${env_name} environment required${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        echo -e "${CYAN}Please activate the environment first:${NC}"
+        echo -e "${GREEN}source ${env_path}/bin/activate${NC}"
+        echo
+        
+        # If in tmux, provide additional guidance
+        if [[ -n "${TMUX:-}" ]]; then
+            echo -e "${YELLOW}💡 You're in a tmux session. Run the activation command above,${NC}"
+            echo -e "${YELLOW}   then re-run your command.${NC}"
+            echo
+        fi
+        
+        return 1
+    fi
+    
+    # Check if python is available in the environment
+    if ! command -v python &> /dev/null; then
+        echo -e "${RED}❌ Python not found in current environment${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${YELLOW}⚠️  Environment appears to be corrupted or not properly activated${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        echo -e "Current VIRTUAL_ENV: ${VIRTUAL_ENV}"
+        echo -e "Current PATH: ${PATH}"
+        echo
+        echo -e "${CYAN}Try deactivating and reactivating:${NC}"
+        echo -e "${GREEN}deactivate${NC}"
+        echo -e "${GREEN}source ${env_path}/bin/activate${NC}"
+        echo
+        return 1
+    fi
+    
+    # Check Python version
+    local python_version=$(python --version 2>&1 | cut -d' ' -f2)
+    echo -e "${BLUE}🐍 Python ${python_version} detected${NC}"
+    
+    # Check if the correct environment is active
+    case "$required_env" in
+        "self-attention")
+            if [[ "$VIRTUAL_ENV" == *"pytorch_2_6"* ]] && [[ "$VIRTUAL_ENV" != *"nxd_inference"* ]]; then
+                echo -e "${GREEN}✓ Self-attention environment active${NC}"
+                
+                # Verify key packages
+                if python -c "import torch" 2>/dev/null; then
+                    echo -e "${GREEN}✓ PyTorch available${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  PyTorch not found in environment${NC}"
+                fi
+                
+                return 0
+            else
+                echo -e "${RED}❌ Wrong environment active: ${VIRTUAL_ENV}${NC}"
+                echo -e "${YELLOW}Please activate the correct environment:${NC}"
+                echo -e "${GREEN}source ${env_path}/bin/activate${NC}"
+                return 1
+            fi
+            ;;
+        "finetune")
+            if [[ "$VIRTUAL_ENV" == *"pytorch_2_6"* ]] && [[ "$VIRTUAL_ENV" != *"nxd_inference"* ]]; then
+                echo -e "${GREEN}✓ Fine-tuning environment active${NC}"
+                
+                # Verify key packages
+                if python -c "import torch" 2>/dev/null; then
+                    echo -e "${GREEN}✓ PyTorch available${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  PyTorch not found in environment${NC}"
+                fi
+                
+                return 0
+            else
+                echo -e "${RED}❌ Wrong environment active: ${VIRTUAL_ENV}${NC}"
+                echo -e "${YELLOW}Please activate the correct environment:${NC}"
+                echo -e "${GREEN}source ${env_path}/bin/activate${NC}"
+                return 1
+            fi
+            ;;
+        "inference")
+            if [[ "$VIRTUAL_ENV" == *"nxd_inference"* ]]; then
+                echo -e "${GREEN}✓ Inference environment active${NC}"
+                
+                # Verify key packages
+                if python -c "import torch" 2>/dev/null; then
+                    echo -e "${GREEN}✓ PyTorch available${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  PyTorch not found in environment${NC}"
+                fi
+                
+                return 0
+            else
+                echo -e "${RED}❌ Wrong environment active: ${VIRTUAL_ENV}${NC}"
+                echo -e "${YELLOW}Please activate the correct environment:${NC}"
+                echo -e "${GREEN}source ${env_path}/bin/activate${NC}"
+                return 1
+            fi
+            ;;
+    esac
+}
+
 # Tmux helper functions
 check_tmux_session() {
     local session_name="$1"
     tmux has-session -t "$session_name" 2>/dev/null
 }
 
-suggest_tmux() {
+suggest_tmux_with_env() {
     local operation="$1"
     local session_name="$2"
-    shift 2
+    local env_path="$3"
+    shift 3
     local args="$*"
     
     if [[ -z "${TMUX:-}" ]]; then
@@ -69,12 +185,13 @@ suggest_tmux() {
         echo
         echo -e "This operation may take a long time. We recommend using tmux:"
         echo
-        echo -e "${CYAN}# Create new session:${NC}"
+        echo -e "${CYAN}# Option 1: Create session and activate environment manually:${NC}"
         echo -e "tmux new -s ${session_name}"
+        echo -e "source ${env_path}/bin/activate"
         echo -e "./nki-llama ${args}"
         echo
-        echo -e "${CYAN}# Or run directly in tmux:${NC}"
-        echo -e "tmux new -s ${session_name} './nki-llama ${args}'"
+        echo -e "${CYAN}# Option 2: Run everything in one command:${NC}"
+        echo -e "tmux new -s ${session_name} 'source ${env_path}/bin/activate && ./nki-llama ${args}'"
         echo
         echo -e "${CYAN}# Detach with: Ctrl+B, D${NC}"
         echo -e "${CYAN}# Reattach with: tmux attach -t ${session_name}${NC}"
@@ -84,7 +201,7 @@ suggest_tmux() {
     fi
 }
 
-# Check active Neuron environment
+# Check active Neuron environment (deprecated - use check_and_suggest_env instead)
 check_neuron_env() {
     if [[ -z "${VIRTUAL_ENV:-}" ]]; then
         echo -e "${RED}❌ No virtual environment active${NC}"
@@ -122,7 +239,20 @@ run_script() {
         return 1
     fi
     
+    # Ensure python is available before running
+    if ! command -v python &> /dev/null; then
+        echo -e "${RED}❌ Python not found in PATH${NC}"
+        echo -e "${YELLOW}Please ensure the virtual environment is properly activated${NC}"
+        return 1
+    fi
+    
     echo -e "${MAGENTA}▶ Running: ${display_name}${NC}"
+    echo -e "${BLUE}  Using Python: $(which python)${NC}"
+    
+    # Export environment variables to ensure child scripts inherit them
+    export VIRTUAL_ENV
+    export PATH
+    
     if bash "$script_path" "$@"; then
         echo -e "${GREEN}✓ ${display_name} completed${NC}\n"
     else
@@ -131,33 +261,47 @@ run_script() {
     fi
 }
 
+# Print configuration
+print_config() {
+    echo -e "${BOLD}Configuration Summary:${NC}"
+    echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    echo -e "\n${CYAN}Environment Paths:${NC}"
+    echo -e "• Self-Attention: ${GREEN}${SELF_ATTENTION_ENV}${NC}"
+    echo -e "• Fine-tuning:    ${GREEN}${FINETUNE_ENV}${NC}"
+    echo -e "• Inference:      ${GREEN}${INFERENCE_ENV}${NC}"
+    
+    echo -e "\n${CYAN}Model Configuration:${NC}"
+    echo -e "• Model ID:    ${GREEN}${MODEL_ID:-Not set}${NC}"
+    echo -e "• Model Name:  ${GREEN}${MODEL_NAME:-Not set}${NC}"
+    echo -e "• TP Size:     ${GREEN}${TENSOR_PARALLEL_SIZE:-8}${NC}"
+    
+    echo -e "\n${CYAN}Directories:${NC}"
+    echo -e "• Base:        ${BLUE}${NKI_BASE}${NC}"
+    echo -e "• Scripts:     ${BLUE}${NKI_SCRIPTS}${NC}"
+    echo -e "• Models:      ${BLUE}${NKI_MODELS}${NC}"
+    echo -e "• Logs:        ${BLUE}${NKI_LOGS}${NC}"
+    
+    if [[ -n "${HF_TOKEN:-}" ]]; then
+        echo -e "\n${CYAN}Authentication:${NC}"
+        echo -e "• HF Token:    ${GREEN}✓ Configured${NC}"
+    else
+        echo -e "\n${CYAN}Authentication:${NC}"
+        echo -e "• HF Token:    ${RED}✗ Not set${NC}"
+    fi
+    
+    echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 ###############################################################################
 # Self-Attention Commands
 ###############################################################################
-
-# Check if self-attention environment is active
-check_self_attention_env() {
-    if [[ -z "${VIRTUAL_ENV:-}" ]]; then
-        echo -e "${RED}❌ No virtual environment active${NC}"
-        echo -e "${YELLOW}Please activate the environment:${NC}"
-        echo -e "${CYAN}source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate${NC}"
-        return 1
-    elif [[ "$VIRTUAL_ENV" == *"pytorch_2_6"* ]]; then
-        echo -e "${GREEN}✓ Self-attention environment active${NC}"
-        return 0
-    else
-        echo -e "${YELLOW}⚠️  Wrong environment active: ${VIRTUAL_ENV}${NC}"
-        echo -e "${YELLOW}Please activate the correct environment:${NC}"
-        echo -e "${CYAN}source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate${NC}"
-        return 1
-    fi
-}
 
 cmd_self_attention_benchmark() {
     echo -e "${BOLD}Running self-attention benchmarks...${NC}"
     
     # Check environment
-    if ! check_self_attention_env; then
+    if ! check_and_suggest_env "self-attention" "Self-attention" "$SELF_ATTENTION_ENV"; then
         return 1
     fi
     
@@ -167,13 +311,12 @@ cmd_self_attention_benchmark() {
         echo -e "${YELLOW}   Benchmarks can take considerable time to complete.${NC}"
         echo -e "${YELLOW}   Disconnections will terminate the process.${NC}"
         echo
-        echo -e "   ${CYAN}tmux new -s self-attention${NC}"
-        echo -e "   ${CYAN}./nki-llama self-attention benchmark${NC}"
+        echo -e "   ${CYAN}tmux new -s self-attention 'source ${SELF_ATTENTION_ENV}/bin/activate && ./nki-llama self-attention benchmark'${NC}"
         echo
         read -p "Continue without tmux? [y/N] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}Please start tmux with: ${CYAN}tmux new -s self-attention${NC}"
+            echo -e "${BLUE}Please start tmux as shown above${NC}"
             exit 0
         fi
     fi
@@ -188,9 +331,23 @@ cmd_self_attention_benchmark() {
     
     cd "$self_attention_dir/scripts"
     
+    # Debug: Show current environment
+    echo -e "${BLUE}Debug Info:${NC}"
+    echo -e "  VIRTUAL_ENV: ${VIRTUAL_ENV}"
+    echo -e "  Python: $(which python 2>/dev/null || echo 'not found')"
+    echo -e "  Python3: $(which python3 2>/dev/null || echo 'not found')"
+    echo
+    
     if [[ -f "./self-attention_benchmark.sh" ]]; then
         echo -e "${MAGENTA}▶ Running: self-attention_benchmark.sh${NC}"
-        bash ./self-attention_benchmark.sh "$@"
+        
+        # Source the virtual environment in the subshell to ensure it's available
+        (
+            if [[ -f "${VIRTUAL_ENV}/bin/activate" ]]; then
+                source "${VIRTUAL_ENV}/bin/activate"
+            fi
+            bash ./self-attention_benchmark.sh "$@"
+        )
     else
         echo -e "${RED}❌ Benchmark script not found: ./self-attention_benchmark.sh${NC}"
         return 1
@@ -201,7 +358,7 @@ cmd_self_attention_test() {
     echo -e "${BOLD}Running self-attention tests...${NC}"
     
     # Check environment
-    if ! check_self_attention_env; then
+    if ! check_and_suggest_env "self-attention" "Self-attention" "$SELF_ATTENTION_ENV"; then
         return 1
     fi
     
@@ -258,7 +415,7 @@ cmd_self_attention_run() {
     echo -e "${BOLD}Running self-attention script...${NC}"
     
     # Check environment
-    if ! check_self_attention_env; then
+    if ! check_and_suggest_env "self-attention" "Self-attention" "$SELF_ATTENTION_ENV"; then
         return 1
     fi
     
@@ -293,7 +450,7 @@ cmd_self_attention_status() {
     echo -e "${BOLD}Self-Attention Status:${NC}"
     
     # Check environment
-    check_self_attention_env || true
+    check_and_suggest_env "self-attention" "Self-attention" "$SELF_ATTENTION_ENV" || true
     echo
     
     # Check directories
@@ -341,26 +498,55 @@ cmd_self_attention_status() {
 
 cmd_finetune_deps() {
     echo -e "${BOLD}Installing fine-tuning dependencies...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "finetune" "Fine-tuning" "$FINETUNE_ENV"; then
+        return 1
+    fi
+    
     run_script "${NKI_FINETUNE_SCRIPTS}/bootstrap.sh" "Dependencies Installation"
 }
 
 cmd_finetune_data() {
     echo -e "${BOLD}Downloading dataset...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "finetune" "Fine-tuning" "$FINETUNE_ENV"; then
+        return 1
+    fi
+    
     run_script "${NKI_FINETUNE_SCRIPTS}/download_data.sh" "Dataset Download"
 }
 
 cmd_finetune_model() {
     echo -e "${BOLD}Downloading model weights...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "finetune" "Fine-tuning" "$FINETUNE_ENV"; then
+        return 1
+    fi
+    
     run_script "${NKI_FINETUNE_SCRIPTS}/download_model.sh" "Model Download"
 }
 
 cmd_finetune_convert() {
     echo -e "${BOLD}Converting checkpoints...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "finetune" "Fine-tuning" "$FINETUNE_ENV"; then
+        return 1
+    fi
+    
     run_script "${NKI_FINETUNE_SCRIPTS}/convert_checkpoints.sh" "Checkpoint Conversion"
 }
 
 cmd_finetune_compile() {
     echo -e "${BOLD}Pre-compiling graphs...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "finetune" "Fine-tuning" "$FINETUNE_ENV"; then
+        return 1
+    fi
     
     # Check if we're in tmux
     if [[ -z "${TMUX:-}" ]]; then
@@ -368,13 +554,12 @@ cmd_finetune_compile() {
         echo -e "${YELLOW}   Graph compilation can take 30-60 minutes.${NC}"
         echo -e "${YELLOW}   Disconnections will terminate the process.${NC}"
         echo
-        echo -e "   ${CYAN}tmux new -s compile${NC}"
-        echo -e "   ${CYAN}./nki-llama finetune compile${NC}"
+        echo -e "   ${CYAN}tmux new -s compile 'source ${FINETUNE_ENV}/bin/activate && ./nki-llama finetune compile'${NC}"
         echo
         read -p "Continue without tmux? [y/N] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}Please start tmux with: ${CYAN}tmux new -s compile${NC}"
+            echo -e "${BLUE}Please start tmux as shown above${NC}"
             exit 0
         fi
     fi
@@ -384,6 +569,11 @@ cmd_finetune_compile() {
 
 cmd_finetune_train() {
     echo -e "${BOLD}Starting fine-tuning...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "finetune" "Fine-tuning" "$FINETUNE_ENV"; then
+        return 1
+    fi
     
     # Show training information
     echo -e "${YELLOW}💡 Fine-tuning will run for multiple hours.${NC}"
@@ -396,13 +586,12 @@ cmd_finetune_train() {
         echo -e "${YELLOW}   Training can take several hours to complete.${NC}"
         echo -e "${YELLOW}   Disconnections will terminate the process (SIGHUP).${NC}"
         echo
-        echo -e "   ${CYAN}tmux new -s training${NC}"
-        echo -e "   ${CYAN}./nki-llama finetune train${NC}"
+        echo -e "   ${CYAN}tmux new -s training 'source ${FINETUNE_ENV}/bin/activate && ./nki-llama finetune train'${NC}"
         echo
         read -p "Continue without tmux? [y/N] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}Please start tmux with: ${CYAN}tmux new -s training${NC}"
+            echo -e "${BLUE}Please start tmux as shown above${NC}"
             exit 0
         fi
     fi
@@ -412,6 +601,11 @@ cmd_finetune_train() {
 
 cmd_finetune_all() {
     echo -e "${BOLD}Running complete fine-tuning pipeline...${NC}\n"
+    
+    # Check environment
+    if ! check_and_suggest_env "finetune" "Fine-tuning" "$FINETUNE_ENV"; then
+        return 1
+    fi
     
     # Check if we're in tmux for the entire pipeline
     if [[ -z "${TMUX:-}" ]]; then
@@ -425,13 +619,12 @@ cmd_finetune_all() {
         echo -e "${YELLOW}   • Training (several hours)${NC}"
         echo -e "${YELLOW}   Total time: 4-8 hours depending on configuration${NC}"
         echo
-        echo -e "   ${CYAN}tmux new -s training${NC}"
-        echo -e "   ${CYAN}./nki-llama finetune all${NC}"
+        echo -e "   ${CYAN}tmux new -s training 'source ${FINETUNE_ENV}/bin/activate && ./nki-llama finetune all'${NC}"
         echo
         read -p "Continue without tmux? [y/N] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}Please start tmux with: ${CYAN}tmux new -s training${NC}"
+            echo -e "${BLUE}Please start tmux as shown above${NC}"
             exit 0
         fi
     fi
@@ -450,16 +643,33 @@ cmd_finetune_all() {
 
 cmd_inference_setup() {
     echo -e "${BOLD}Setting up vLLM for inference...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "inference" "Inference" "$INFERENCE_ENV"; then
+        return 1
+    fi
+    
     bash "${NKI_INFERENCE_SCRIPTS}/setup-vllm.sh"
 }
 
 cmd_inference_download() {
     echo -e "${BOLD}Downloading model for inference...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "inference" "Inference" "$INFERENCE_ENV"; then
+        return 1
+    fi
+    
     bash "${NKI_INFERENCE_SCRIPTS}/download-model.sh"
 }
 
 cmd_inference_benchmark() {
     echo -e "${BOLD}Running NKI benchmark evaluation...${NC}"
+    
+    # Check environment
+    if ! check_and_suggest_env "inference" "Inference" "$INFERENCE_ENV"; then
+        return 1
+    fi
     
     # Parse benchmark mode and special flags
     local mode="evaluate_all"  # Default mode
@@ -515,13 +725,12 @@ cmd_inference_benchmark() {
         echo -e "${YELLOW}⚠️  Not running in tmux. ${BOLD}This is critical for long compilations!${NC}"
         echo -e "${YELLOW}   Disconnections will terminate the process (SIGHUP).${NC}"
         echo
-        echo -e "   ${CYAN}tmux new -s benchmark${NC}"
-        echo -e "   ${CYAN}./nki-llama inference benchmark ${mode} ${args[*]}${NC}"
+        echo -e "   ${CYAN}tmux new -s benchmark 'source ${INFERENCE_ENV}/bin/activate && ./nki-llama inference benchmark ${mode} ${args[*]}'${NC}"
         echo
         read -p "Continue without tmux? [y/N] " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}Please start tmux with: ${CYAN}tmux new -s benchmark${NC}"
+            echo -e "${BLUE}Please start tmux as shown above${NC}"
             exit 0
         fi
     fi
@@ -531,7 +740,13 @@ cmd_inference_benchmark() {
 
 cmd_inference_server() {
     echo -e "${BOLD}Starting vLLM server...${NC}"
-    suggest_tmux "vLLM Server" "vllm-server" "inference server"
+    
+    # Check environment
+    if ! check_and_suggest_env "inference" "Inference" "$INFERENCE_ENV"; then
+        return 1
+    fi
+    
+    suggest_tmux_with_env "vLLM Server" "vllm-server" "$INFERENCE_ENV" "inference server"
     bash "${NKI_INFERENCE_SCRIPTS}/start-server.sh"
 }
 
@@ -723,16 +938,16 @@ show_help() {
     echo
     
     echo -e "${CYAN}Environment Setup:${NC}"
-    echo -e "  Self-Attention: source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate"
-    echo -e "  Fine-tuning:    source ${NEURON_VENV}/bin/activate"
-    echo -e "  Inference:      source ${NEURON_INFERENCE_VENV}/bin/activate"
+    echo -e "  Self-Attention: ${GREEN}source ${SELF_ATTENTION_ENV}/bin/activate${NC}"
+    echo -e "  Fine-tuning:    ${GREEN}source ${FINETUNE_ENV}/bin/activate${NC}"
+    echo -e "  Inference:      ${GREEN}source ${INFERENCE_ENV}/bin/activate${NC}"
     echo
     
     echo -e "${CYAN}Troubleshooting:${NC}"
     echo -e "  • Always use tmux for long operations (compile, train, benchmark)"
+    echo -e "  • If no environment is active, the script will tell you which to activate"
     echo -e "  • If benchmark fails with cache errors, use --clear-cache"
     echo -e "  • Check status to see if compilation cache has failed entries"
-    echo -e "  • For self-attention, ensure correct environment is activated"
     echo
 }
 
@@ -767,17 +982,17 @@ EOF
     echo -e "${BOLD}Quick Start Guide:${NC}"
     echo -e "1. Edit .env file with your Hugging Face token"
     echo -e "2. For self-attention testing:"
-    echo -e "   ${CYAN}source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate${NC}"
-    echo -e "   ${CYAN}tmux new -s self-attention  # ${YELLOW}IMPORTANT: Use tmux!${NC}"
+    echo -e "   ${CYAN}source ${SELF_ATTENTION_ENV}/bin/activate${NC}"
+    echo -e "   ${CYAN}tmux new -s self-attention${NC}"
     echo -e "   ${CYAN}./nki-llama self-attention benchmark${NC}"
     echo -e "3. For fine-tuning:"
-    echo -e "   ${CYAN}source ${NEURON_VENV}/bin/activate${NC}"
-    echo -e "   ${CYAN}tmux new -s training  # ${YELLOW}IMPORTANT: Use tmux!${NC}"
+    echo -e "   ${CYAN}source ${FINETUNE_ENV}/bin/activate${NC}"
+    echo -e "   ${CYAN}tmux new -s training${NC}"
     echo -e "   ${CYAN}./nki-llama finetune all${NC}"
     echo -e "4. For model benchmarking:"
-    echo -e "   ${CYAN}source ${NEURON_INFERENCE_VENV}/bin/activate${NC}"
+    echo -e "   ${CYAN}source ${INFERENCE_ENV}/bin/activate${NC}"
     echo -e "   ${CYAN}./nki-llama inference download${NC}"
-    echo -e "   ${CYAN}tmux new -s benchmark  # ${YELLOW}IMPORTANT: Use tmux!${NC}"
+    echo -e "   ${CYAN}tmux new -s benchmark${NC}"
     echo -e "   ${CYAN}./nki-llama inference benchmark       # Full benchmark${NC}"
     echo -e "   ${CYAN}./nki-llama inference benchmark single   # Quick test${NC}"
     echo -e "5. For inference serving:"
@@ -786,6 +1001,7 @@ EOF
     echo
     echo -e "${YELLOW}💡 Pro Tips:${NC}"
     echo -e "   • Always use tmux for long operations"
+    echo -e "   • The script will tell you which environment to activate if needed"
     echo -e "   • Check ./nki-llama status for system health"
     echo -e "   • Use --clear-cache if benchmark fails with cache errors"
     echo
@@ -826,6 +1042,10 @@ main() {
             cmd_inference_server "$@"
             ;;
         jupyter)
+            # Check environment
+            if ! check_and_suggest_env "inference" "Inference" "$INFERENCE_ENV"; then
+                exit 1
+            fi
             bash "${NKI_INFERENCE_SCRIPTS}/jupyter.sh" "$@"
             ;;
             

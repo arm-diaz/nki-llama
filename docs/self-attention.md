@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-This guide focuses on working with the sefl-attention kernels provided and optimizing them further using the Neuron Kernel Interface (NKI) compilation on AWS Inferentia/Trainium. This is a perfect starting place for teams who want to learn more about NKI and how kernel optimizations can be applied without having to train or inference components. 
+This guide focuses on working with the self-attention kernels provided and optimizing them further using the Neuron Kernel Interface (NKI) compilation on AWS Inferentia/Trainium. This is a perfect starting place for teams who want to learn more about NKI and how kernel optimizations can be applied without having to train or inference components.
 
 ### Instance Requirements
 - **Instance Type**: trn1.2xlarge (minimum) or trn1.32xlarge
@@ -14,8 +14,8 @@ This guide focuses on working with the sefl-attention kernels provided and optim
 
 ### Environment Setup
 ```bash
-# Activate the inference environment
-source /opt/aws_neuronx_venv_pytorch_2_6_nxd_inference/bin/activate
+# Activate the self-attention environment
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
 ```
 
 ## 🚀 Deployment
@@ -76,6 +76,52 @@ chmod +x install.sh
 ./install.sh
 ```
 
+## 🎮 Using the NKI-LLAMA CLI
+
+The repository includes a unified command-line interface that simplifies all operations. You can use either the CLI commands or run the scripts directly.
+
+### Option 1: Using NKI-LLAMA CLI (Recommended)
+
+```bash
+# Once connected to your instance
+cd ~/nki-llama
+
+# View all self-attention commands
+./nki-llama help
+
+# Run interactive setup wizard
+./nki-llama setup
+```
+
+**Self-Attention CLI Commands:**
+- `./nki-llama self-attention benchmark` - Run comprehensive benchmarks
+- `./nki-llama self-attention test` - Run all tests
+- `./nki-llama self-attention test forward` - Run forward pass tests only
+- `./nki-llama self-attention test backward` - Run backward pass tests only
+- `./nki-llama self-attention run <script>` - Run a specific script
+
+**Key Benefits of Using CLI:**
+- Automatic environment detection and activation guidance
+- Built-in tmux recommendations for long operations
+- Integrated logging to `logs/` directory
+- Consistent error handling and reporting
+
+### Option 2: Direct Script Execution
+
+If you prefer to run scripts directly:
+
+```bash
+# Navigate to scripts directory
+cd ~/nki-llama/src/self-attention/scripts
+
+# Run the comprehensive benchmark script
+./self-attention_benchmark.sh 
+
+# Run specific test suite
+pytest ../tests/test_flash_attn_fwd.py -v -s
+pytest ../tests/test_flash_attn_bwd.py -v -s
+```
+
 ## 📁 File Overview
 
 ### Core Test Files
@@ -98,20 +144,20 @@ chmod +x install.sh
 - **Purpose:** Optimized forward attention computation with tiling and memory efficiency
 - **Features:** Causal masking, mixed precision, dropout, GQA/MQA support, logit bias
 - **Optimizations:** Memory tiling, recomputation, SBUF management
-Usage: flash_fwd[batch_size, kv_heads](q, k, v, seed, config=FlashConfig(...))
+- **Usage:** `flash_fwd[batch_size, kv_heads](q, k, v, seed, config=FlashConfig(...))`
 
 **`flash_attn_bwd` - Flash Attention Backward Pass**
 
 - **Purpose:** Backward pass gradient computation for attention
 - **Features:** Efficient gradient calculation for Q, K, V with recomputation
 - **Optimizations:** Tiled computation, memory-efficient recomputation
-- **Usage:** flash_attn_bwd[batch_size, heads](q, k, v, o, dy, lse, seed)
+- **Usage:** `flash_attn_bwd[batch_size, heads](q, k, v, o, dy, lse, seed)`
 
 **`fused_self_attn_for_SD_small_head_size` - Stable Diffusion Specialized**
 
 - **Purpose:** Optimized attention for small head sizes (≤128) in Stable Diffusion
 - **Features:** Specialized for SD workloads, different tensor layouts
-- **Usage:** fused_self_attn_for_SD_small_head_size[batch_size](q, k, v)
+- **Usage:** `fused_self_attn_for_SD_small_head_size[batch_size](q, k, v)`
 
 ## 🚀 Quick Start
 
@@ -129,14 +175,64 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### Step 2: Modify and Optimiza the Kernel Implementations
+### Step 2: Modify and Optimize the Kernel Implementations
 
-Refer to the `attention.py` file for details on the kernel implementation. This is the main file where contestants would want to edit to implement their optimization before testing the kernels. 
+Refer to the `attention.py` file for details on the kernel implementation. This is the main file where contestants would want to edit to implement their optimization before testing the kernels.
 
 ### Step 3: Run the Flash Self-Attention Kernel Unit Tests
+
+#### Using NKI-LLAMA CLI (Recommended)
+
 ```bash
+# The CLI will check your environment and guide you if needed
+cd ~/nki-llama
+
+# Use tmux for benchmarking (recommended)
+tmux new -s self-attention
+
+# Run comprehensive benchmarks
+./nki-llama self-attention benchmark
+
+# Run all tests
+./nki-llama self-attention test
+
+# Run specific test types
+./nki-llama self-attention test forward   # Forward pass only
+./nki-llama self-attention test backward  # Backward pass only
+
+# Detach from tmux with Ctrl+B, D
+# Reattach with: tmux attach -t self-attention
+```
+
+**Environment Handling:**
+The CLI will automatically:
+- Detect if you're in the correct virtual environment
+- Provide the exact activation command if needed
+- Suggest tmux for long operations
+- Log all output to `logs/nki-llama_<timestamp>.log`
+
+Example CLI output when environment is not active:
+```
+❌ No virtual environment active
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  Self-attention environment required
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Please activate the environment first:
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+```
+
+#### Using Direct Script Execution
+
+```bash
+# Activate the environment manually
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+
 # Run the unit tests
 cd ~/nki-llama/src/self-attention/scripts
+
+# Use tmux for long operations
+tmux new -s benchmark
 
 # Run the comprehensive benchmark script
 ./self-attention_benchmark.sh 
@@ -144,7 +240,6 @@ cd ~/nki-llama/src/self-attention/scripts
 # Run specific test suite
 pytest ../tests/test_flash_attn_fwd.py -v -s
 pytest ../tests/test_flash_attn_bwd.py -v -s
-
 ```
 
 ### Step 4: Understand the Scoring Mechanism
@@ -258,32 +353,67 @@ The benchmark generates a detailed JSON file with accumulated metrics:
 
 ## 🛠️ Advanced Usage
 
-### Custom Test Execution
+### Custom Test Execution with NKI-LLAMA CLI
+
+```bash
+# Run specific scripts with the CLI
+./nki-llama self-attention run custom_benchmark.sh
+
+# Pass additional pytest arguments through CLI
+./nki-llama self-attention test forward -k "test_flash_attn_fwd_perf" --tb=short
+
+# Run with verbose output
+./nki-llama self-attention test all -v -s --durations=10
 ```
+
+### Direct pytest Execution
+```bash
 # Run with maximum verbosity and detailed tracebacks
-pytest test_flash_attn_fwd_verbose.py -v -s --tb=long
+pytest test_flash_attn_fwd.py -v -s --tb=long
 
 # Run specific parameter combinations
-pytest test_flash_attn_fwd_verbose.py::TestAttention::test_flash_attn_fwd_perf[1-6-32768-32768-96-bfloat16-True-True-True-2048-3-False-87000000000] -v -s
+pytest test_flash_attn_fwd.py::TestAttention::test_flash_attn_fwd_perf[1-6-32768-32768-96-bfloat16-True-True-True-2048-3-False-87000000000] -v -s
 
 # Stop on first failure for debugging
-pytest test_flash_attn_fwd_verbose.py -v -s -x
+pytest test_flash_attn_fwd.py -v -s -x
 
 # Run with timing information
-pytest test_flash_attn_fwd_verbose.py -v -s --durations=10
+pytest test_flash_attn_fwd.py -v -s --durations=10
 
 # Capture output to file
-pytest test_flash_attn_fwd_verbose.py -v -s > test_results.log 2>&1
+pytest test_flash_attn_fwd.py -v -s > test_results.log 2>&1
 ```
 
 ## 🔧 Troubleshooting
 
+### Using NKI-LLAMA CLI for Diagnostics
+
+```bash
+# Check overall status
+./nki-llama status
+
+# Check self-attention specific status
+./nki-llama self-attention status
+
+# View logs
+ls -la logs/nki-llama_*.log
+tail -f logs/nki-llama_*.log
+```
+
 ### Common Issues
+
+#### Environment Not Active:
+The CLI will detect this and show:
+```
+❌ No virtual environment active
+Please activate the environment first:
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+```
 
 #### Performance Test Failures:
 - Check hardware availability and configuration
 - Verify expected latency thresholds are appropriate for your hardware
-- Review memory usage estimates for resource constraint
+- Review memory usage estimates for resource constraints
 
 #### Numerical Test Failures:
 - Increase tolerance if needed for specific hardware characteristics
@@ -310,3 +440,68 @@ pytest test_flash_attn_fwd_verbose.py -v -s > test_results.log 2>&1
 - 💥 FAILED: One or more metrics exceeded thresholds
 - ⚠️ xfail: Expected failure due to known issues
 - ❓ Cannot Determine: Missing metric data (API issues)
+
+## 📊 Complete Workflow Example
+
+### Using NKI-LLAMA CLI (Recommended)
+```bash
+# Start a new tmux session
+tmux new -s hackathon-attention
+
+# Navigate to repository
+cd ~/nki-llama
+
+# If environment is not active, the CLI will tell you to:
+# source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+
+# Modify kernel implementation
+nano src/self-attention/attention.py
+
+# Run benchmarks
+./nki-llama self-attention benchmark
+
+# Run specific tests
+./nki-llama self-attention test forward
+./nki-llama self-attention test backward
+
+# Check logs
+tail -f logs/nki-llama_*.log
+
+# Detach from tmux: Ctrl+B, D
+# Reattach later: tmux attach -t hackathon-attention
+```
+
+### Using Direct Scripts
+```bash
+# Start tmux
+tmux new -s benchmark
+
+# Activate environment
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+
+# Navigate to scripts
+cd ~/nki-llama/src/self-attention/scripts
+
+# Run benchmark
+./self-attention_benchmark.sh
+
+# Run individual tests
+cd ../tests
+pytest test_flash_attn_fwd.py -v -s
+pytest test_flash_attn_bwd.py -v -s
+```
+
+## 📚 Resources
+
+- [NKI Documentation](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/nki/index.html)
+- [NKI Samples Repository](https://github.com/aws-neuron/nki-samples)
+- [Flash Attention Paper](https://arxiv.org/abs/2205.14135)
+- [Neuron SDK Documentation](https://awsdocs-neuron.readthedocs-hosted.com/)
+
+---
+
+**Pro Tips:**
+- Always use the NKI-LLAMA CLI for better environment management
+- Run benchmarks in tmux to avoid disconnection issues
+- Check `./nki-llama status` regularly to monitor system health
+- The CLI logs everything to `logs/` for later analysis
