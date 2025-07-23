@@ -26,6 +26,7 @@ Parameters:
     Default: trn1.32xlarge
     AllowedValues:
       - trn1.32xlarge
+      - trn1.2xlarge
   
   VpcOption:
     Description: Choose whether to use an existing VPC or create a new one
