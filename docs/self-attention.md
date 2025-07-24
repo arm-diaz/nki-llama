@@ -190,6 +190,9 @@ cd ~/nki-llama
 # Use tmux for benchmarking (recommended)
 tmux new -s self-attention
 
+# Activate python environment
+source /opt/aws_neuronx_venv_pytorch_2_6/bin/activate
+
 # Run comprehensive benchmarks
 ./nki-llama self-attention benchmark
 

@@ -277,8 +277,8 @@ print_config() {
     echo -e "• TP Size:     ${GREEN}${TENSOR_PARALLEL_SIZE:-8}${NC}"
     
     echo -e "\n${CYAN}Directories:${NC}"
-    echo -e "• Base:        ${BLUE}${NKI_BASE}${NC}"
-    echo -e "• Scripts:     ${BLUE}${NKI_SCRIPTS}${NC}"
+    echo -e "• Base:        ${BLUE}${NKI_ROOT}${NC}"
+    echo -e "• Scripts:     ${BLUE}${NKI_SRC}${NC}"
     echo -e "• Models:      ${BLUE}${NKI_MODELS}${NC}"
     echo -e "• Logs:        ${BLUE}${NKI_LOGS}${NC}"
     
